@@ -1,5 +1,4 @@
-package host_config
-
+package hostconfig
 
 type HostConfig struct {
 	Host                  string //may change to different data type later
