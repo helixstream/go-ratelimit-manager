@@ -1,6 +1,5 @@
 package host_config
 
-
 type HostConfig struct {
 	Host                  string //may change to different data type later
 	SustainedRequestLimit int

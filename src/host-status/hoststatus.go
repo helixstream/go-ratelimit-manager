@@ -1,5 +1,10 @@
 package host_status
 
+import (
+	"../host-config"
+	"time"
+)
+
 type HostStatus struct {
 	Host                  string
 	SustainedRequests     int
@@ -7,6 +12,43 @@ type HostStatus struct {
 	PendingRequests       int
 	FirstSustainedRequest int
 	FirstBurstRequest     int
+}
+
+func (h *HostStatus) IsInSustainedPeriod(hostConfig host_config.HostConfig) bool {
+	now := time.Now().Unix()
+	nowUnit := int(now)
+	//current time < start of period + length of period
+	if nowUnit < (*h).FirstSustainedRequest+hostConfig.SustainedTimePeriod {
+		return true
+	}
+	//updates host status values
+	h.recordOutOfPeriodSustainedRequests(nowUnit)
+	return false
+}
+
+func (h *HostStatus) IsInBurstPeriod(hostConfig host_config.HostConfig) bool {
+	now := time.Now().Unix()
+	nowUnit := int(now)
+	//current time < start of period + length of period
+	if nowUnit < (*h).FirstBurstRequest+hostConfig.BurstTimePeriod {
+		return true
+	}
+	//updates host status values
+	h.recordOutOfPeriodBurstRequests(nowUnit)
+	return false
+}
+
+func (h *HostStatus) recordOutOfPeriodSustainedRequests(currentTime int) {
+	h.SetFirstSustainedRequest(currentTime)
+	h.SetSustainedRequests(0)
+	h.IncrementPendingRequests(1)
+}
+
+func (h *HostStatus) recordOutOfPeriodBurstRequests(currentTime int) {
+	h.SetFirstBurstRequest(currentTime)
+	h.SetBurstRequests(0)
+	h.IncrementPendingRequests(1)
+
 }
 
 func NewHostStatus(host string, sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int, firstBurstRequest int) HostStatus {
