@@ -2,8 +2,7 @@ package host_status
 
 import (
 	"../host-config"
-
-	t "time"
+	"time"
 )
 
 type HostStatus struct {
@@ -14,20 +13,22 @@ type HostStatus struct {
 	FirstSustainedRequest int
 	FirstBurstRequest     int
 }
+
 //recursively calls CanMakeRequest until a request can be  made
-func (h *HostStatus) CheckRequest(requestWeight int, time int, host host_config.HostConfig) bool {
-	canMake, wait := h.CanMakeRequest(requestWeight, time, host)
+func (h *HostStatus) CheckRequest(requestWeight int, host host_config.HostConfig) bool {
+	canMake, wait := h.CanMakeRequest(requestWeight, int(time.Now().UTC().Unix()), host)
 
 	if wait != 0 {
 		//sleeps out of burst or sustained period where limit has been reached
-		t.Sleep(t.Duration(wait) * t.Millisecond)
+		time.Sleep(time.Duration(wait) * time.Millisecond)
 
-		canMake, _ = h.CanMakeRequest(requestWeight, int(t.Now().UTC().Unix()), host)
+		canMake, _ = h.CanMakeRequest(requestWeight, int(time.Now().UTC().Unix()), host)
 		return canMake
 	}
 
 	return true
 }
+
 //checks to see if a request can be made
 //returns true, 0 if request can be made
 //returns false and the number of milliseconds to wait if a request cannot be made
@@ -47,7 +48,6 @@ func (h *HostStatus) CanMakeRequest(requestWeight int, now int, host host_config
 			return false, h.WaitUntilEndOfSustained(host)
 		}
 
-
 		//did not hit either burst or sustained limit
 		//so can make request and increments pending requests
 		h.IncrementPendingRequests(requestWeight)
@@ -56,19 +56,17 @@ func (h *HostStatus) CanMakeRequest(requestWeight int, now int, host host_config
 		//not in burst period, but in sustained period
 	} else if h.IsInSustainedPeriod(host, nowUnit) {
 
-
 		//reset burst to 0 and sets start of new burst period to now
 		h.SetBurstRequests(0)
 		h.SetFirstBurstRequest(nowUnit)
 
 		if h.WillHitSustainedLimit(requestWeight, host) {
-			 return false, h.WaitUntilEndOfSustained(host)
+			return false, h.WaitUntilEndOfSustained(host)
 		}
 
 		//can make request because did not hit sustained limit
 		h.IncrementPendingRequests(requestWeight)
 		return true, 0
-
 
 	} else {
 		//out of burst and sustained, able to make request
@@ -79,34 +77,34 @@ func (h *HostStatus) CanMakeRequest(requestWeight int, now int, host host_config
 		//set start of both sustained and burst to now
 		h.SetFirstSustainedRequest(nowUnit)
 		h.SetFirstBurstRequest(nowUnit)
-		//increment the number of pending requests to the weight of the request
+		//increment the number of pending requests by the weight of the request
 		h.IncrementPendingRequests(requestWeight)
 		return true, 0
 	}
 }
 
 func (h *HostStatus) IsInSustainedPeriod(hostConfig host_config.HostConfig, currentTime int) bool {
-			//current time - start of period <= length of the period
-	return currentTime - h.GetFirstSustainedRequest() < hostConfig.SustainedTimePeriod && currentTime - h.GetFirstSustainedRequest() >= 0
+	//current time - start of period <= length of the period
+	return currentTime-h.GetFirstSustainedRequest() < hostConfig.SustainedTimePeriod && currentTime-h.GetFirstSustainedRequest() >= 0
 }
 
 func (h *HostStatus) IsInBurstPeriod(hostConfig host_config.HostConfig, currentTime int) bool {
-		//current time - start of period == length of period
-	return currentTime - h.GetFirstBurstRequest() < hostConfig.BurstTimePeriod && currentTime - h.GetFirstBurstRequest() >= 0
+	//current time - start of period == length of period
+	return currentTime-h.GetFirstBurstRequest() < hostConfig.BurstTimePeriod && currentTime-h.GetFirstBurstRequest() >= 0
 }
 
 func (h *HostStatus) WillHitSustainedLimit(requestWeight int, host host_config.HostConfig) bool {
 	totalRequests := h.GetSustainedRequests() + h.GetPendingRequests()
 	//if the total number of requests plus the weight of the requested request is greater than the limit
 	//than the requested request should not occur because it would cause us to go over the limit
-	return totalRequests + requestWeight > host.SustainedRequestLimit
+	return totalRequests+requestWeight > host.SustainedRequestLimit
 }
 
 func (h *HostStatus) WillHitBurstLimit(requestWeight int, host host_config.HostConfig) bool {
 	totalRequests := h.GetBurstRequests() + h.GetPendingRequests()
 	//if the total number of requests plus the weight of the requested request is greater than the limit
 	//than the requested request should not occur because it would cause us to go over the limit
-	return totalRequests + requestWeight > host.BurstRequestLimit
+	return totalRequests+requestWeight > host.BurstRequestLimit
 }
 
 func (h *HostStatus) WaitUntilEndOfSustained(host host_config.HostConfig) int {
@@ -115,9 +113,9 @@ func (h *HostStatus) WaitUntilEndOfSustained(host host_config.HostConfig) int {
 	//converts seconds to milliseconds
 	endMS := endOfPeriod * 1000
 
-	now := t.Now().UTC().UnixNano()
+	now := time.Now().UTC().UnixNano()
 	//converts nanoseconds to milliseconds
-	nowMS := now/1000000
+	nowMS := now / 1000000
 
 	return endMS - int(nowMS)
 }
@@ -128,9 +126,9 @@ func (h *HostStatus) WaitUntilEndOfBurst(host host_config.HostConfig) int {
 	//converts seconds to milliseconds
 	endMS := endOfPeriod * 1000
 
-	now := t.Now().UTC().UnixNano()
+	now := time.Now().UTC().UnixNano()
 	//converts nanoseconds to milliseconds
-	nowMS := now/1000000
+	nowMS := now / 1000000
 
 	return endMS - int(nowMS)
 }
@@ -140,35 +138,35 @@ func NewHostStatus(host string, sustainedRequests int, burstRequests int, pendin
 }
 
 func (h *HostStatus) IncrementSustainedRequests(increment int) {
-	(*h).SustainedRequests += increment
+	h.SustainedRequests += increment
 }
 
 func (h *HostStatus) SetSustainedRequests(value int) {
-	(*h).SustainedRequests = value
+	h.SustainedRequests = value
 }
 
 func (h *HostStatus) IncrementBurstRequests(increment int) {
-	(*h).BurstRequests += increment
+	h.BurstRequests += increment
 }
 
 func (h *HostStatus) SetBurstRequests(value int) {
-	(*h).BurstRequests = value
+	h.BurstRequests = value
 }
 
 func (h *HostStatus) IncrementPendingRequests(increment int) {
-	(*h).PendingRequests += increment
+	h.PendingRequests += increment
 }
 
 func (h *HostStatus) DecrementPendingRequests(increment int) {
-	(*h).PendingRequests -= increment
+	h.PendingRequests -= increment
 }
 
 func (h *HostStatus) SetFirstSustainedRequest(value int) {
-	(*h).FirstSustainedRequest = value
+	h.FirstSustainedRequest = value
 }
 
 func (h *HostStatus) SetFirstBurstRequest(value int) {
-	(*h).FirstBurstRequest = value
+	h.FirstBurstRequest = value
 }
 
 func (h *HostStatus) GetSustainedRequests() int {
@@ -176,17 +174,17 @@ func (h *HostStatus) GetSustainedRequests() int {
 }
 
 func (h *HostStatus) GetBurstRequests() int {
-	return (*h).BurstRequests
+	return h.BurstRequests
 }
 
 func (h *HostStatus) GetPendingRequests() int {
-	return (*h).PendingRequests
+	return h.PendingRequests
 }
 
 func (h *HostStatus) GetFirstSustainedRequest() int {
-	return (*h).FirstSustainedRequest
+	return h.FirstSustainedRequest
 }
 
 func (h *HostStatus) GetFirstBurstRequest() int {
-	return (*h).FirstBurstRequest
+	return h.FirstBurstRequest
 }
