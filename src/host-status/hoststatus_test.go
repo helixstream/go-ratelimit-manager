@@ -8,7 +8,7 @@ import (
 	//"time"
 )
 
-func Test_CanMakeRequestRecursive(t *testing.T) {
+/*func Test_CanMakeRequestRecursive(t *testing.T) {
 	hosts := []host_config.HostConfig{
 		//type ==
 		host_config.NewHostConfig("test_host_1", 1200, 60, 20, 1),
@@ -76,11 +76,11 @@ func Test_CanMakeRequestRecursive(t *testing.T) {
 		canMake := statuses[i].status.CheckRequest(statuses[i].requestWeight, now, statuses[i].host)
 
 		if !canMake {
-			t.Errorf("Loop: %v. Expected true, got: %v", i, canMake)
+			t.Errorf("Loop: %v. Expected true for Can Make Request Recursive, got: %v", i, canMake)
 		}
 
 	}
-}
+}*/
 
 func Test_CanMakeRequest(t *testing.T) {
 	hosts := []host_config.HostConfig{
@@ -101,6 +101,7 @@ func Test_CanMakeRequest(t *testing.T) {
 
 
 	statuses := []HostStatusTest {
+		//not is sustained, not in burst, no sus limit, no burst limit
 		{
 			hosts[0],
 			1,
@@ -115,6 +116,7 @@ func Test_CanMakeRequest(t *testing.T) {
 			NewHostStatus("test_host", 0, 0, 5, now, now),
 			true,
 		},
+		//is in sustained, not in burst, no sustained limit, burst limit does not matter
 		{
 			hosts[0],
 			1,
@@ -123,6 +125,14 @@ func Test_CanMakeRequest(t *testing.T) {
 			true,
 		},
 		{
+			hosts[1],
+			3,
+			NewHostStatus("test_host", 500, 10, 20, now - 30, now - hosts[0].BurstTimePeriod),
+			NewHostStatus("test_host", 500, 0, 23, now - 30, now),
+			true,
+		},
+		//is in sustained, not in burst, will hit sustained limit, burst limit does not matter
+		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 1195, 5, 5, now - (hosts[0].SustainedTimePeriod/2), now - hosts[0].BurstTimePeriod - 1),
@@ -130,6 +140,14 @@ func Test_CanMakeRequest(t *testing.T) {
 			false,
 		},
 		{
+			hosts[1],
+			5,
+			NewHostStatus("test_host", 597, 5, 5, now - hosts[0].SustainedTimePeriod + 1, now - hosts[0].BurstTimePeriod - 1),
+			NewHostStatus("test_host",  597, 0, 5, now - hosts[0].SustainedTimePeriod + 1, now),
+			false,
+		},
+		//is in sustained, is in burst, will hit burst limit, sustained limit does not matter
+		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 1000, 18, 2, now - (hosts[0].SustainedTimePeriod/2), now),
@@ -137,17 +155,40 @@ func Test_CanMakeRequest(t *testing.T) {
 			false,
 		},
 		{
+			hosts[1],
+			5,
+			NewHostStatus("test_host", 1000, 15, 1, now - (hosts[0].SustainedTimePeriod/2), now),
+			NewHostStatus("test_host", 1000, 15, 1, now - (hosts[0].SustainedTimePeriod/2), now),
+			false,
+		},
+		//is in sustained, is in burst, will hit sustained limit, will not hit burst limit
+		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 1195, 8, 6, now - (hosts[0].SustainedTimePeriod/2), now),
 			NewHostStatus("test_host", 1195, 8, 6, now - (hosts[0].SustainedTimePeriod/2), now),
 			false,
 		},
+		{
+			hosts[1],
+			1,
+			NewHostStatus("test_host", 1195, 8, 6, now - (hosts[0].SustainedTimePeriod/2), now),
+			NewHostStatus("test_host", 1195, 8, 6, now - (hosts[0].SustainedTimePeriod/2), now),
+			false,
+		},
+		//is in sustained, is in burst, will not hit either limit
 		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 1000, 10, 4, now - (hosts[0].SustainedTimePeriod/2), now),
 			NewHostStatus("test_host", 1000, 10, 5, now - (hosts[0].SustainedTimePeriod/2), now),
+			true,
+		},
+		{
+			hosts[1],
+			3,
+			NewHostStatus("test_host", 400, 10, 4, now - (hosts[0].SustainedTimePeriod/2), now),
+			NewHostStatus("test_host", 400, 10, 7, now - (hosts[0].SustainedTimePeriod/2), now),
 			true,
 		},
 	}
@@ -432,7 +473,26 @@ func TestHostStatus_WillHitBurstLimit(t *testing.T) {
 }
 
 func TestHostStatus_WaitUntilEndOfBurst(t *testing.T) {
+	hosts := []host_config.HostConfig{
+		host_config.NewHostConfig("test_host_1", 0, 0, 0, 1),
+		host_config.NewHostConfig("test_host_2", 0, 0, 0, 3),
+		host_config.NewHostConfig("test_host_3", 0, 0, 0, 5),
+	}
 
+	for i := 0; i < len(hosts); i++ {
+
+		now := int(time.Now().UTC().Unix())
+
+		status := NewHostStatus("test_host", 0, 0, 0, 0, now)
+		wait := status.WaitUntilEndOfBurst(hosts[i])
+
+		time1 := int(time.Now().UTC().Unix())
+		time.Sleep(time.Duration(wait) * time.Millisecond)
+		time2 := int(time.Now().UTC().Unix())
+		if time2-time1 != hosts[i].BurstTimePeriod {
+			t.Errorf("Expected sleep of %v, got: %v", hosts[i].BurstTimePeriod, time2-time1)
+		}
+	}
 }
 
 func TestHostStatus_WaitUntilEndOfSustained(t *testing.T) {

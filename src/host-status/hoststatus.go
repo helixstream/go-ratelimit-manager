@@ -97,6 +97,8 @@ func (h *HostStatus) IsInBurstPeriod(hostConfig host_config.HostConfig, currentT
 
 func (h *HostStatus) WillHitSustainedLimit(requestWeight int, host host_config.HostConfig) bool {
 	totalRequests := h.GetSustainedRequests() + h.GetPendingRequests()
+	//if the total number of requests plus the weight of the requested request is greater than the limit
+	//than the requested request should not occur because it would cause us to go over the limit
 	return totalRequests + requestWeight > host.SustainedRequestLimit
 }
 
@@ -108,20 +110,26 @@ func (h *HostStatus) WillHitBurstLimit(requestWeight int, host host_config.HostC
 }
 
 func (h *HostStatus) WaitUntilEndOfSustained(host host_config.HostConfig) int {
+	//end = start of period plus length of period
 	endOfPeriod := h.GetFirstSustainedRequest() + host.SustainedTimePeriod
+	//converts seconds to milliseconds
 	endMS := endOfPeriod * 1000
 
 	now := t.Now().UTC().UnixNano()
+	//converts nanoseconds to milliseconds
 	nowMS := now/1000000
 
 	return endMS - int(nowMS)
 }
 
 func (h *HostStatus) WaitUntilEndOfBurst(host host_config.HostConfig) int {
+	//end = start of period plus length of period
 	endOfPeriod := h.GetFirstBurstRequest() + host.BurstTimePeriod
+	//converts seconds to milliseconds
 	endMS := endOfPeriod * 1000
 
 	now := t.Now().UTC().UnixNano()
+	//converts nanoseconds to milliseconds
 	nowMS := now/1000000
 
 	return endMS - int(nowMS)
