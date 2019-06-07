@@ -4,9 +4,104 @@ import (
 	"../host-config"
 	"testing"
 	"time"
+
+	//"time"
 )
 
-func TestIsInSustainedPeriod(t *testing.T) {
+func Test_CanMakeRequest(t *testing.T) {
+	hosts := []host_config.HostConfig{
+		//type ==
+		host_config.NewHostConfig("test_host_1", 1200, 60, 20, 1),
+		//type burst/period > sustained/period
+		host_config.NewHostConfig("test_host_2", 600, 60, 20, 1),
+		//type burst/period < sustained/period
+		//host_config.NewHostConfig("test_host_3", 1200, 60, 10, 1),
+	}
+
+	type HostStatusTest struct {
+		host host_config.HostConfig
+		requestWeight int
+		status HostStatus
+		expectedStatus HostStatus
+		expectedCanMakeRequest bool
+	}
+
+	now := int(time.Now().UTC().Unix())
+
+
+	statuses := []HostStatusTest {
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 500, 500, 0, now - hosts[0].SustainedTimePeriod - 5, now - hosts[0].BurstTimePeriod - 1),
+			NewHostStatus("test_host", 0, 0, 1, now, now),
+			true,
+		},
+		{
+			hosts[1],
+			5,
+			NewHostStatus("test_host", 500, 500, 0, now - hosts[0].SustainedTimePeriod - 5, now - hosts[0].BurstTimePeriod - 1),
+			NewHostStatus("test_host", 0, 0, 5, now, now),
+			true,
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 500, 500, 20, now, now - hosts[0].BurstTimePeriod - 1),
+			NewHostStatus("test_host", 500, 0, 21, now, now),
+			true,
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 1195, 5, 5, now - (hosts[0].SustainedTimePeriod/2), now - hosts[0].BurstTimePeriod - 1),
+			NewHostStatus("test_host",  1195, 0, 5, now - (hosts[0].SustainedTimePeriod/2), now),
+			false,
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 1000, 18, 2, now - (hosts[0].SustainedTimePeriod/2), now),
+			NewHostStatus("test_host", 1000, 18, 2, now - (hosts[0].SustainedTimePeriod/2), now),
+			false,
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 1195, 8, 6, now - (hosts[0].SustainedTimePeriod/2), now),
+			NewHostStatus("test_host", 1195, 8, 6, now - (hosts[0].SustainedTimePeriod/2), now),
+			false,
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 1000, 10, 4, now - (hosts[0].SustainedTimePeriod/2), now),
+			NewHostStatus("test_host", 1000, 10, 5, now - (hosts[0].SustainedTimePeriod/2), now),
+			true,
+		},
+	}
+
+	for i := 0; i < len(statuses); i++ {
+		canMake, _ := statuses[i].status.CanMakeRequest(statuses[i].requestWeight, now, statuses[i].host)
+		if canMake != statuses[i].expectedCanMakeRequest {
+			//error if the boolean the function returns does not match the expected value
+			t.Errorf("Loop: %v. Expected ability to make request: %v, got: %v", i, statuses[i].expectedCanMakeRequest, canMake)
+		}
+		if statuses[i].status != statuses[i].expectedStatus {
+			expected := statuses[i].expectedStatus
+			status := statuses[i].status
+			//causes an error if the expected host status is different than the modified host status
+			t.Errorf("Loop: %v, Expected %v sustained requests, got: %v. Expected %v burst requests, got: %v. Expected %v pending requests, got: %v. Expected %v first sustained request, got: %v, Expected %v first burst request, got; %v",
+				i, expected.GetSustainedRequests(), status.GetSustainedRequests(), expected.GetBurstRequests(), status.GetBurstRequests(), expected.GetPendingRequests(), status.GetPendingRequests(), expected.GetFirstSustainedRequest(),
+				status.GetFirstSustainedRequest(), expected.GetFirstBurstRequest(), status.GetFirstBurstRequest())
+		}
+
+	}
+}
+
+
+
+/*func TestIsInSustainedPeriod(t *testing.T) {
 
 	type SustainedPeriodTest struct {
 		Input          HostStatus
@@ -96,9 +191,9 @@ func Test_recordOutOfPeriodSustainedRequest(t *testing.T) {
 			t.Errorf("Expected %v sustained requests, got: %v. Expected %v pending got: %v. Expected time of: %v, got: %v.", expected.GetSustainedRequests(), result.GetSustainedRequests(), expected.GetPendingRequests(), result.GetPendingRequests(), expected.GetFirstSustainedRequest(), result.GetFirstSustainedRequest())
 		}
 	}
-}
+}*/
 
-func Test_recordOutOfPeriodBurstRequest(t *testing.T) {
+/*func Test_recordOutOfPeriodBurstRequest(t *testing.T) {
 	const currentTime int = 12345
 
 	type PeriodBurstTest struct {
@@ -125,4 +220,4 @@ func Test_recordOutOfPeriodBurstRequest(t *testing.T) {
 			t.Errorf("Expected %v burst requests, got: %v. Expected %v pending got: %v. Expected time of: %v, got: %v.", expected.GetBurstRequests(), result.GetBurstRequests(), expected.GetPendingRequests(), result.GetPendingRequests(), expected.GetFirstBurstRequest(), result.GetFirstBurstRequest())
 		}
 	}
-}
+}*/
