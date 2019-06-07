@@ -8,13 +8,84 @@ import (
 	//"time"
 )
 
-func Test_CanMakeRequest(t *testing.T) {
+func Test_CanMakeRequestRecursive(t *testing.T) {
 	hosts := []host_config.HostConfig{
 		//type ==
 		host_config.NewHostConfig("test_host_1", 1200, 60, 20, 1),
 		//type burst/period > sustained/period
 		host_config.NewHostConfig("test_host_2", 600, 60, 20, 1),
 		//type burst/period < sustained/period
+		host_config.NewHostConfig("test_host_3", 1200, 60, 10, 1),
+	}
+
+	type HostStatusTest struct {
+		host host_config.HostConfig
+		requestWeight int
+		status HostStatus
+	}
+
+	now := int(time.Now().UTC().Unix())
+
+
+	statuses := []HostStatusTest {
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 500, 500, 0, now - hosts[0].SustainedTimePeriod - 5, now - hosts[0].BurstTimePeriod - 1),
+
+		},
+		{
+			hosts[1],
+			5,
+			NewHostStatus("test_host", 500, 500, 0, now - hosts[0].SustainedTimePeriod - 5, now - hosts[0].BurstTimePeriod - 1),
+
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 500, 500, 20, now, now - hosts[0].BurstTimePeriod - 1),
+
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 1195, 5, 5, now - (hosts[0].SustainedTimePeriod/2), now - hosts[0].BurstTimePeriod - 1),
+
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 1000, 18, 2, now - (hosts[0].SustainedTimePeriod/2), now),
+
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 1195, 8, 6, now - (hosts[0].SustainedTimePeriod/2), now),
+
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 1000, 10, 4, now - (hosts[0].SustainedTimePeriod/2), now),
+
+		},
+	}
+
+	for i := 0; i < len(statuses); i++ {
+		canMake := statuses[i].status.CheckRequest(statuses[i].requestWeight, now, statuses[i].host)
+
+		if !canMake {
+			t.Errorf("Loop: %v. Expected true, got: %v", i, canMake)
+		}
+
+	}
+}
+
+func Test_CanMakeRequest(t *testing.T) {
+	hosts := []host_config.HostConfig{
+		host_config.NewHostConfig("test_host_1", 1200, 60, 20, 1),
+		host_config.NewHostConfig("test_host_2", 600, 60, 20, 1),
 		//host_config.NewHostConfig("test_host_3", 1200, 60, 10, 1),
 	}
 
@@ -99,125 +170,271 @@ func Test_CanMakeRequest(t *testing.T) {
 	}
 }
 
-
-
-/*func TestIsInSustainedPeriod(t *testing.T) {
-
-	type SustainedPeriodTest struct {
-		Input          HostStatus
-		ExpectedOutput bool
+func TestHostStatus_IsInSustainedPeriod(t *testing.T) {
+	hosts := []host_config.HostConfig{
+		host_config.NewHostConfig("test_host_1", 0, 60, 0, 0),
+		host_config.NewHostConfig("test_host_2", 0, 60, 0, 0),
+		host_config.NewHostConfig("test_host_3", 0, 45, 0, 0),
 	}
 
-	now := time.Now().UTC().Unix()
-	nowUnit := int(now)
+	type HostStatusTest struct {
+		host host_config.HostConfig
+		status HostStatus
+		expected bool
+	}
 
-	host := host_config.HostConfig{"test_host", 600, 10, 60, 1}
+	now := int(time.Now().UTC().Unix())
 
-	testCases := []SustainedPeriodTest{
+
+	testCases := []HostStatusTest {
 		{
-			HostStatus{"test_host", 300, 100, 100, nowUnit - (host.SustainedTimePeriod / 2), 0},
+			hosts[0],
+			NewHostStatus("test_host", 0, 0, 0, now - hosts[0].SustainedTimePeriod - 5, 0),
+			false,
+		},
+		{
+			hosts[1],
+
+			NewHostStatus("test_host", 0, 0, 0, now - hosts[0].SustainedTimePeriod - 5, 0),
+			false,
+		},
+		{
+			hosts[0],
+
+			NewHostStatus("test_host", 0, 0, 0, now, 0),
 			true,
 		},
 		{
-			HostStatus{"test_host", 300, 100, 100, nowUnit - host.SustainedTimePeriod - 5, 0},
+			hosts[1],
+
+			NewHostStatus("test_host", 0, 0, 0, now - (hosts[0].SustainedTimePeriod/7), 0),
+			true,
+		},
+		{
+			hosts[0],
+
+			NewHostStatus("test_host", 0, 0, 0, now - (hosts[0].SustainedTimePeriod), 0),
+			false,
+		},
+		{
+			hosts[2],
+
+			NewHostStatus("test_host", 0, 0, 0, now - (hosts[0].SustainedTimePeriod/2), 0),
+			true,
+		},
+		{
+			hosts[0],
+
+			NewHostStatus("test_host", 0, 0, 0, now - (hosts[0].SustainedTimePeriod) -1, 0),
 			false,
 		},
 	}
 
-	for i := 0; i < len(testCases)-1; i++ {
-		isInPeriod := testCases[i].Input.IsInSustainedPeriod(host, nowUnit)
-
-		if isInPeriod != testCases[i].ExpectedOutput {
-			t.Errorf("Expected request to be in sustained period: %v, got: %v", testCases[i].ExpectedOutput, isInPeriod)
+	for i := 0; i < len(testCases); i++ {
+		result := testCases[i].status.IsInSustainedPeriod(testCases[i].host, now)
+		if result != testCases[i].expected {
+			t.Errorf("Loop: %v. Expected %v for is in sustained period, got: %v.", i, testCases[i].expected, result)
 		}
 	}
 }
 
-func TestIsInBurstPeriod(t *testing.T) {
-	type BurstPeriodTest struct {
-		Input          HostStatus
-		ExpectedOutput bool
+func TestHostStatus_IsInBurstPeriod(t *testing.T) {
+	hosts := []host_config.HostConfig{
+		host_config.NewHostConfig("test_host_1", 0, 0, 0, 1),
+		host_config.NewHostConfig("test_host_2", 0, 0, 0, 5),
+		host_config.NewHostConfig("test_host_3", 0, 0, 0, 2),
 	}
 
-	now := time.Now().UTC().Unix()
-	nowUnit := int(now)
+	type HostStatusTest struct {
+		host host_config.HostConfig
+		status HostStatus
+		expected bool
+	}
 
-	host := host_config.HostConfig{"test_host", 600, 10, 60, 1}
+	now := int(time.Now().UTC().Unix())
 
-	testCases := []BurstPeriodTest{
+
+	testCases := []HostStatusTest {
 		{
-			HostStatus{"test_host", 300, 100, 100, 0, nowUnit-1},
+			hosts[0],
+			NewHostStatus("test_host", 0, 0, 0, 0, now - hosts[0].BurstTimePeriod - 1),
+			false,
+		},
+		{
+			hosts[1],
+
+			NewHostStatus("test_host", 0, 0, 0, 0, now -3),
 			true,
 		},
 		{
-			HostStatus{"test_host", 300, 100, 100, 0, nowUnit-2},
+			hosts[0],
+
+			NewHostStatus("test_host", 0, 0, 0, 0, now - hosts[0].BurstTimePeriod - 1),
 			false,
+		},
+		{
+			hosts[1],
+
+			NewHostStatus("test_host", 0, 0, 0, 0, now - hosts[1].BurstTimePeriod - 1),
+			false,
+		},
+		{
+			hosts[0],
+
+			NewHostStatus("test_host", 0, 0, 0, 0, now),
+			true,
+		},
+		{
+			hosts[2],
+
+			NewHostStatus("test_host", 0, 0, 0, 0, now - 1),
+			true,
+		},
+		{
+			hosts[0],
+
+			NewHostStatus("test_host", 0, 0, 0, 0, now),
+			true,
 		},
 	}
 
 	for i := 0; i < len(testCases); i++ {
-		isInPeriod := testCases[i].Input.IsInBurstPeriod(host, nowUnit)
-
-		if isInPeriod != testCases[i].ExpectedOutput {
-			t.Errorf("Expected request to be in burst period: %v, got: %v", testCases[i].ExpectedOutput, isInPeriod)
+		result := testCases[i].status.IsInBurstPeriod(testCases[i].host, now)
+		if result != testCases[i].expected {
+			t.Errorf("Loop: %v. Expected %v for is in burst period, got: %v.", i, testCases[i].expected, result)
 		}
 	}
 }
 
-func Test_recordOutOfPeriodSustainedRequest(t *testing.T) {
-	const currentTime int = 12345
-
-	type PeriodSustainedTest struct {
-		Input          HostStatus
-		ExpectedOutput HostStatus
+func TestHostStatus_WillHitSustainedLimit(t *testing.T) {
+	hosts := []host_config.HostConfig{
+		host_config.NewHostConfig("test_host_1", 1200, 0, 0, 0),
+		host_config.NewHostConfig("test_host_2", 600, 0, 0, 0),
+		host_config.NewHostConfig("test_host_3", 100, 0, 0, 0),
 	}
 
-	testCases := []PeriodSustainedTest{
+	type TestHostStatus struct {
+		host host_config.HostConfig
+		weight int
+		status HostStatus
+		expected bool
+	}
+
+	testCases := []TestHostStatus {
 		{
-			NewHostStatus("test_host", 100, 56, 35, 0, 0),
-			NewHostStatus("test_host", 0, 56, 36, currentTime, 0),
+			hosts[0],
+			1,
+			NewHostStatus("test_host", 1200, 0, 0, 0, 0),
+			true,
 		},
 		{
-			NewHostStatus("test_host", 200, 0, 0, 2345, 0),
-			NewHostStatus("test_host", 0, 0, 1, currentTime, 0),
+			hosts[1],
+			7,
+			NewHostStatus("test_host", 595, 0, 1, 0, 0),
+			true,
 		},
+		{
+			hosts[2],
+			9,
+			NewHostStatus("test_host", 90, 0, 2, 0, 0),
+			true,
+		},
+		{
+			hosts[0],
+			20,
+			NewHostStatus("test_host", 1100, 0, 80, 0, 0),
+			false,
+		},
+		{
+			hosts[1],
+			1,
+			NewHostStatus("test_host", 35, 0, 40, 0, 0),
+			false,
+		},
+		{
+			hosts[2],
+			15,
+			NewHostStatus("test_host", 85, 0, 0,0,0),
+			false,
+
+		},
+
 	}
 
 	for i := 0; i < len(testCases); i++ {
-		testCases[i].Input.recordOutOfPeriodSustainedRequests(currentTime)
-		result := testCases[i].Input
-		expected := testCases[i].ExpectedOutput
-		if result != expected {
-			t.Errorf("Expected %v sustained requests, got: %v. Expected %v pending got: %v. Expected time of: %v, got: %v.", expected.GetSustainedRequests(), result.GetSustainedRequests(), expected.GetPendingRequests(), result.GetPendingRequests(), expected.GetFirstSustainedRequest(), result.GetFirstSustainedRequest())
+		result := testCases[i].status.WillHitSustainedLimit(testCases[i].weight, testCases[i].host)
+		if result != testCases[i].expected {
+			t.Errorf("Loop: %v. Expected %v for will hit sustained limit, got: %v.", i, testCases[i].expected, result)
 		}
 	}
-}*/
+}
 
-/*func Test_recordOutOfPeriodBurstRequest(t *testing.T) {
-	const currentTime int = 12345
-
-	type PeriodBurstTest struct {
-		Input          HostStatus
-		ExpectedOutput HostStatus
+func TestHostStatus_WillHitBurstLimit(t *testing.T) {
+	hosts := []host_config.HostConfig{
+		host_config.NewHostConfig("test_host_1", 0, 0, 20, 0),
+		host_config.NewHostConfig("test_host_2", 0, 0, 5, 0),
+		host_config.NewHostConfig("test_host_3", 0, 0, 10, 0),
 	}
 
-	testCases := []PeriodBurstTest{
+	type TestHostStatus struct {
+		host host_config.HostConfig
+		weight int
+		status HostStatus
+		expected bool
+	}
+
+	testCases := []TestHostStatus {
 		{
-			NewHostStatus("test_host", 100, 56, 35, 0, 0),
-			NewHostStatus("test_host", 100, 0, 36, 0, currentTime),
+			hosts[0],
+			1,
+			NewHostStatus("testHost", 0, 18, 2, 0, 0),
+			true,
 		},
 		{
-			NewHostStatus("test_host", 200, 0, 0, 0, 2345),
-			NewHostStatus("test_host", 200, 0, 1, 0, currentTime),
+			hosts[1],
+			3,
+			NewHostStatus("testHost", 0, 3, 0, 0, 0),
+			true,
 		},
+		{
+			hosts[2],
+			5,
+			NewHostStatus("testHost", 0, 5, 1, 0, 0),
+			true,
+		},
+		{
+			hosts[0],
+			1,
+			NewHostStatus("testHost", 0, 10, 8, 0, 0),
+			false,
+		},
+		{
+			hosts[1],
+			1,
+			NewHostStatus("testHost", 0, 0, 0, 0,0),
+			false,
+		},
+		{
+			hosts[2],
+			1,
+			NewHostStatus("testHost", 0, 9, 0, 0, 0),
+			false,
+		},
+
 	}
 
 	for i := 0; i < len(testCases); i++ {
-		testCases[i].Input.recordOutOfPeriodBurstRequests(currentTime)
-		result := testCases[i].Input
-		expected := testCases[i].ExpectedOutput
-		if result != testCases[i].ExpectedOutput {
-			t.Errorf("Expected %v burst requests, got: %v. Expected %v pending got: %v. Expected time of: %v, got: %v.", expected.GetBurstRequests(), result.GetBurstRequests(), expected.GetPendingRequests(), result.GetPendingRequests(), expected.GetFirstBurstRequest(), result.GetFirstBurstRequest())
+		result := testCases[i].status.WillHitBurstLimit(testCases[i].weight, testCases[i].host)
+		if result != testCases[i].expected {
+			t.Errorf("Loop: %v. Expected %v for will hit burst limit, got %v. ", i, testCases[i].expected, result)
 		}
 	}
-}*/
+}
+
+func TestHostStatus_WaitUntilEndOfBurst(t *testing.T) {
+
+}
+
+func TestHostStatus_WaitUntilEndOfSustained(t *testing.T) {
+
+}

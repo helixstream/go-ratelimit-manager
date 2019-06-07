@@ -3,7 +3,7 @@ package host_status
 import (
 	"../host-config"
 
-	"time"
+	t "time"
 )
 
 type HostStatus struct {
@@ -14,10 +14,26 @@ type HostStatus struct {
 	FirstSustainedRequest int
 	FirstBurstRequest     int
 }
+//recursively calls CanMakeRequest until a request can be  made
+func (h *HostStatus) CheckRequest(requestWeight int, time int, host host_config.HostConfig) bool {
+	canMake, wait := h.CanMakeRequest(requestWeight, time, host)
 
+	if wait != 0 {
+		//sleeps out of burst or sustained period where limit has been reached
+		t.Sleep(t.Duration(wait) * t.Millisecond)
+
+		canMake, _ = h.CanMakeRequest(requestWeight, int(t.Now().UTC().Unix()), host)
+		return canMake
+	}
+
+	return true
+}
+//checks to see if a request can be made
+//returns true, 0 if request can be made
+//returns false and the number of milliseconds to wait if a request cannot be made
 func (h *HostStatus) CanMakeRequest(requestWeight int, now int, host host_config.HostConfig) (bool, int) {
 	nowUnit := int(now)
-
+	//if request is in the current burst period
 	if h.IsInBurstPeriod(host, nowUnit) {
 		//will the request push us over the burst limit
 		if h.WillHitBurstLimit(requestWeight, host) {
@@ -37,8 +53,9 @@ func (h *HostStatus) CanMakeRequest(requestWeight int, now int, host host_config
 		h.IncrementPendingRequests(requestWeight)
 		return true, 0
 
-	} else if h.IsInSustainedPeriod(host, nowUnit) {
 		//not in burst period, but in sustained period
+	} else if h.IsInSustainedPeriod(host, nowUnit) {
+
 
 		//reset burst to 0 and sets start of new burst period to now
 		h.SetBurstRequests(0)
@@ -48,13 +65,13 @@ func (h *HostStatus) CanMakeRequest(requestWeight int, now int, host host_config
 			 return false, h.WaitUntilEndOfSustained(host)
 		}
 
-		//can make request because did not hit sus limit
+		//can make request because did not hit sustained limit
 		h.IncrementPendingRequests(requestWeight)
 		return true, 0
 
 
 	} else {
-		//out of burst and sustained, able to make requests
+		//out of burst and sustained, able to make request
 
 		//reset number of sustained and burst in new time period
 		h.SetSustainedRequests(0)
@@ -94,7 +111,7 @@ func (h *HostStatus) WaitUntilEndOfSustained(host host_config.HostConfig) int {
 	endOfPeriod := h.GetFirstSustainedRequest() + host.SustainedTimePeriod
 	endMS := endOfPeriod * 1000
 
-	now := time.Now().UTC().UnixNano()
+	now := t.Now().UTC().UnixNano()
 	nowMS := now/1000000
 
 	return endMS - int(nowMS)
@@ -104,7 +121,7 @@ func (h *HostStatus) WaitUntilEndOfBurst(host host_config.HostConfig) int {
 	endOfPeriod := h.GetFirstBurstRequest() + host.BurstTimePeriod
 	endMS := endOfPeriod * 1000
 
-	now := time.Now().UTC().UnixNano()
+	now := t.Now().UTC().UnixNano()
 	nowMS := now/1000000
 
 	return endMS - int(nowMS)
