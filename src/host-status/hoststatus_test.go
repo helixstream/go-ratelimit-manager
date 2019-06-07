@@ -14,91 +14,78 @@ func Test_CanMakeRequestRecursive(t *testing.T) {
 	}
 
 	type HostStatusTest struct {
-		host host_config.HostConfig
+		host          host_config.HostConfig
 		requestWeight int
-		status HostStatus
+		status        HostStatus
 	}
 
 	now := int(time.Now().UTC().Unix())
 
-
-	statuses := []HostStatusTest {
+	statuses := []HostStatusTest{
 		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
-
 		},
 		{
 			hosts[1],
 			5,
 			NewHostStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
-
 		},
 		//is in sustained, not in burst, no sustained limit, burst limit does not matter
 		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 500, 500, 20, now, now-hosts[0].BurstTimePeriod-1),
-
 		},
 		{
 			hosts[1],
 			3,
 			NewHostStatus("test_host", 500, 10, 20, now-30, now-hosts[0].BurstTimePeriod),
-
 		},
 		//is in sustained, not in burst, will hit sustained limit, burst limit does not matter
 		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod/2), now-hosts[0].BurstTimePeriod-1),
-
 		},
 		{
 			hosts[1],
 			5,
 			NewHostStatus("test_host", 597, 5, 5, now-hosts[0].SustainedTimePeriod+1, now-hosts[0].BurstTimePeriod-1),
-
 		},
 		//is in sustained, is in burst, will hit burst limit, sustained limit does not matter
 		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
-
 		},
 		{
 			hosts[1],
 			5,
 			NewHostStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
-
 		},
 		//is in sustained, is in burst, will hit sustained limit, will not hit burst limit
 		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
-
 		},
 		{
 			hosts[1],
 			1,
 			NewHostStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
-
 		},
 		//is in sustained, is in burst, will not hit either limit
 		{
 			hosts[0],
 			1,
 			NewHostStatus("test_host", 1000, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
-
 		},
 		{
 			hosts[1],
 			3,
 			NewHostStatus("test_host", 400, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
-
 		},
 	}
 
