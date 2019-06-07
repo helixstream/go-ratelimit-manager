@@ -2,7 +2,6 @@ package host_status
 
 import (
 	"../host-config"
-	"time"
 )
 
 type HostStatus struct {
@@ -14,27 +13,23 @@ type HostStatus struct {
 	FirstBurstRequest     int
 }
 
-func (h *HostStatus) IsInSustainedPeriod(hostConfig host_config.HostConfig) bool {
-	now := time.Now().Unix()
-	nowUnit := int(now)
-	//current time < start of period + length of period
-	if nowUnit < (*h).FirstSustainedRequest+hostConfig.SustainedTimePeriod {
+func (h *HostStatus) IsInSustainedPeriod(hostConfig host_config.HostConfig, currentTime int) bool {
+	//current time <= start of period + length of period
+	if currentTime <= (*h).FirstSustainedRequest+hostConfig.SustainedTimePeriod {
 		return true
 	}
 	//updates host status values
-	h.recordOutOfPeriodSustainedRequests(nowUnit)
+	h.recordOutOfPeriodSustainedRequests(currentTime)
 	return false
 }
 
-func (h *HostStatus) IsInBurstPeriod(hostConfig host_config.HostConfig) bool {
-	now := time.Now().Unix()
-	nowUnit := int(now)
-	//current time < start of period + length of period
-	if nowUnit < (*h).FirstBurstRequest+hostConfig.BurstTimePeriod {
+func (h *HostStatus) IsInBurstPeriod(hostConfig host_config.HostConfig, currentTime int) bool {
+	//current time <= start of period + length of period
+	if currentTime <= (*h).FirstBurstRequest+hostConfig.BurstTimePeriod {
 		return true
 	}
 	//updates host status values
-	h.recordOutOfPeriodBurstRequests(nowUnit)
+	h.recordOutOfPeriodBurstRequests(currentTime)
 	return false
 }
 
