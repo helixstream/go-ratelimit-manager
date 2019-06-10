@@ -1,11 +1,10 @@
-package host_status
+package host
 
 import (
-	"../host-config"
 	"time"
 )
 
-type HostStatus struct {
+type RequestsStatus struct {
 	Host                  string
 	SustainedRequests     int
 	BurstRequests         int
@@ -15,7 +14,7 @@ type HostStatus struct {
 }
 
 //recursively calls CanMakeRequest until a request can be  made
-func (h *HostStatus) CheckRequest(requestWeight int, host host_config.HostConfig) bool {
+func (h *RequestsStatus) CheckRequest(requestWeight int, host RateLimitConfig) bool {
 	canMake, wait := h.CanMakeRequest(requestWeight, time.Now().UTC().Unix(), host)
 
 	if wait != 0 {
@@ -32,7 +31,7 @@ func (h *HostStatus) CheckRequest(requestWeight int, host host_config.HostConfig
 //checks to see if a request can be made
 //returns true, 0 if request can be made
 //returns false and the number of milliseconds to wait if a request cannot be made
-func (h *HostStatus) CanMakeRequest(requestWeight int, now int64, host host_config.HostConfig) (bool, int64) {
+func (h *RequestsStatus) CanMakeRequest(requestWeight int, now int64, host RateLimitConfig) (bool, int64) {
 
 	//if request is in the current burst period
 	if h.isInBurstPeriod(host, now) {
@@ -87,35 +86,35 @@ func (h *HostStatus) CanMakeRequest(requestWeight int, now int64, host host_conf
 
 }
 
-func (h *HostStatus) isInSustainedPeriod(hostConfig host_config.HostConfig, currentTime int64) bool {
+func (h *RequestsStatus) isInSustainedPeriod(hostConfig RateLimitConfig, currentTime int64) bool {
 	timeSincePeriodStart := currentTime - h.GetFirstSustainedRequest()
 
 	//current time - start of period <= length of the period
 	return timeSincePeriodStart < hostConfig.SustainedTimePeriod && timeSincePeriodStart >= 0
 }
 
-func (h *HostStatus) isInBurstPeriod(hostConfig host_config.HostConfig, currentTime int64) bool {
+func (h *RequestsStatus) isInBurstPeriod(hostConfig RateLimitConfig, currentTime int64) bool {
 	timeSincePeriodStart := currentTime - h.GetFirstBurstRequest()
 
 	//current time - start of period == length of period
 	return timeSincePeriodStart < hostConfig.BurstTimePeriod && timeSincePeriodStart >= 0
 }
 
-func (h *HostStatus) willHitSustainedLimit(requestWeight int, host host_config.HostConfig) bool {
+func (h *RequestsStatus) willHitSustainedLimit(requestWeight int, host RateLimitConfig) bool {
 	totalRequests := h.GetSustainedRequests() + h.GetPendingRequests()
 	//if the total number of requests plus the weight of the requested request is greater than the limit
 	//than the requested request should not occur because it would cause us to go over the limit
 	return totalRequests+requestWeight > host.SustainedRequestLimit
 }
 
-func (h *HostStatus) willHitBurstLimit(requestWeight int, host host_config.HostConfig) bool {
+func (h *RequestsStatus) willHitBurstLimit(requestWeight int, host RateLimitConfig) bool {
 	totalRequests := h.GetBurstRequests() + h.GetPendingRequests()
 	//if the total number of requests plus the weight of the requested request is greater than the limit
 	//than the requested request should not occur because it would cause us to go over the limit
 	return totalRequests+requestWeight > host.BurstRequestLimit
 }
 
-func (h *HostStatus) timeUntilEndOfSustained(host host_config.HostConfig) (millisecondsToWait int64) {
+func (h *RequestsStatus) timeUntilEndOfSustained(host RateLimitConfig) (millisecondsToWait int64) {
 	endOfPeriod := h.GetFirstSustainedRequest() + host.SustainedTimePeriod
 	//converts seconds to milliseconds
 	endMS := endOfPeriod * 1000
@@ -127,7 +126,7 @@ func (h *HostStatus) timeUntilEndOfSustained(host host_config.HostConfig) (milli
 	return endMS - nowMS
 }
 
-func (h *HostStatus) timeUntilEndOfBurst(host host_config.HostConfig) (millisecondsToWait int64) {
+func (h *RequestsStatus) timeUntilEndOfBurst(host RateLimitConfig) (millisecondsToWait int64) {
 	endOfPeriod := h.GetFirstBurstRequest() + host.BurstTimePeriod
 	//converts seconds to milliseconds
 	endMS := endOfPeriod * 1000
@@ -139,58 +138,58 @@ func (h *HostStatus) timeUntilEndOfBurst(host host_config.HostConfig) (milliseco
 	return endMS - nowMS
 }
 
-func NewHostStatus(host string, sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64) HostStatus {
-	return HostStatus{host, sustainedRequests, burstRequests, pending, firstSustainedRequests, firstBurstRequest}
+func NewHostStatus(host string, sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64) RequestsStatus {
+	return RequestsStatus{host, sustainedRequests, burstRequests, pending, firstSustainedRequests, firstBurstRequest}
 }
 
-func (h *HostStatus) IncrementSustainedRequests(increment int) {
+func (h *RequestsStatus) IncrementSustainedRequests(increment int) {
 	h.SustainedRequests += increment
 }
 
-func (h *HostStatus) SetSustainedRequests(value int) {
+func (h *RequestsStatus) SetSustainedRequests(value int) {
 	h.SustainedRequests = value
 }
 
-func (h *HostStatus) IncrementBurstRequests(increment int) {
+func (h *RequestsStatus) IncrementBurstRequests(increment int) {
 	h.BurstRequests += increment
 }
 
-func (h *HostStatus) SetBurstRequests(value int) {
+func (h *RequestsStatus) SetBurstRequests(value int) {
 	h.BurstRequests = value
 }
 
-func (h *HostStatus) IncrementPendingRequests(increment int) {
+func (h *RequestsStatus) IncrementPendingRequests(increment int) {
 	h.PendingRequests += increment
 }
 
-func (h *HostStatus) DecrementPendingRequests(increment int) {
+func (h *RequestsStatus) DecrementPendingRequests(increment int) {
 	h.PendingRequests -= increment
 }
 
-func (h *HostStatus) SetFirstSustainedRequest(value int64) {
+func (h *RequestsStatus) SetFirstSustainedRequest(value int64) {
 	h.FirstSustainedRequest = value
 }
 
-func (h *HostStatus) SetFirstBurstRequest(value int64) {
+func (h *RequestsStatus) SetFirstBurstRequest(value int64) {
 	h.FirstBurstRequest = value
 }
 
-func (h *HostStatus) GetSustainedRequests() int {
+func (h *RequestsStatus) GetSustainedRequests() int {
 	return (*h).SustainedRequests
 }
 
-func (h *HostStatus) GetBurstRequests() int {
+func (h *RequestsStatus) GetBurstRequests() int {
 	return h.BurstRequests
 }
 
-func (h *HostStatus) GetPendingRequests() int {
+func (h *RequestsStatus) GetPendingRequests() int {
 	return h.PendingRequests
 }
 
-func (h *HostStatus) GetFirstSustainedRequest() int64 {
+func (h *RequestsStatus) GetFirstSustainedRequest() int64 {
 	return h.FirstSustainedRequest
 }
 
-func (h *HostStatus) GetFirstBurstRequest() int64 {
+func (h *RequestsStatus) GetFirstBurstRequest() int64 {
 	return h.FirstBurstRequest
 }

@@ -1,23 +1,22 @@
-package host_status
+package host
 
 import (
-	"../host-config"
 	"github.com/go-test/deep"
 	"testing"
 	"time"
 )
 
 func Test_CheckRequest(t *testing.T) {
-	hosts := []host_config.HostConfig{
-		host_config.NewHostConfig("test_host_1", 1200, 60, 20, 1),
-		host_config.NewHostConfig("test_host_2", 600, 60, 20, 1),
+	hosts := []RateLimitConfig{
+		NewHostConfig("test_host_1", 1200, 60, 20, 1),
+		NewHostConfig("test_host_2", 600, 60, 20, 1),
 	}
 
 	type HostStatusTest struct {
 		name          string
-		host          host_config.HostConfig
+		host          RateLimitConfig
 		requestWeight int
-		status        HostStatus
+		status        RequestsStatus
 	}
 
 	now := time.Now().UTC().Unix()
@@ -102,7 +101,7 @@ func Test_CheckRequest(t *testing.T) {
 			canMake := testCases[i].status.CheckRequest(testCases[i].requestWeight, testCases[i].host)
 
 			if !canMake {
-				t.Errorf("Loop: %v. Expected true for CheckRequest, got: %v. ", i, canMake)
+				t.Errorf("Loop: %v. Expected true for CheckRequest, got: %v. Subname: %v", i, canMake, testCases[i].name)
 			}
 		})
 
@@ -110,17 +109,17 @@ func Test_CheckRequest(t *testing.T) {
 }
 
 func Test_CanMakeRequest(t *testing.T) {
-	hosts := []host_config.HostConfig{
-		host_config.NewHostConfig("test_host_1", 1200, 60, 20, 1),
-		host_config.NewHostConfig("test_host_2", 600, 60, 20, 1),
+	hosts := []RateLimitConfig{
+		NewHostConfig("test_host_1", 1200, 60, 20, 1),
+		NewHostConfig("test_host_2", 600, 60, 20, 1),
 	}
 
 	type HostStatusTest struct {
 		name                   string
-		host                   host_config.HostConfig
+		host                   RateLimitConfig
 		requestWeight          int
-		status                 HostStatus
-		expectedStatus         HostStatus
+		status                 RequestsStatus
+		expectedStatus         RequestsStatus
 		expectedCanMakeRequest bool
 	}
 
@@ -242,15 +241,15 @@ func Test_CanMakeRequest(t *testing.T) {
 }
 
 func Test_IsInSustainedPeriod(t *testing.T) {
-	hosts := []host_config.HostConfig{
-		host_config.NewHostConfig("test_host_1", 0, 60, 0, 0),
-		host_config.NewHostConfig("test_host_2", 0, 60, 0, 0),
-		host_config.NewHostConfig("test_host_3", 0, 45, 0, 0),
+	hosts := []RateLimitConfig{
+		NewHostConfig("test_host_1", 0, 60, 0, 0),
+		NewHostConfig("test_host_2", 0, 60, 0, 0),
+		NewHostConfig("test_host_3", 0, 45, 0, 0),
 	}
 
 	type HostStatusTest struct {
-		host     host_config.HostConfig
-		status   HostStatus
+		host     RateLimitConfig
+		status   RequestsStatus
 		expected bool
 	}
 
@@ -303,15 +302,15 @@ func Test_IsInSustainedPeriod(t *testing.T) {
 }
 
 func Test_IsInBurstPeriod(t *testing.T) {
-	hosts := []host_config.HostConfig{
-		host_config.NewHostConfig("test_host_1", 0, 0, 0, 1),
-		host_config.NewHostConfig("test_host_2", 0, 0, 0, 5),
-		host_config.NewHostConfig("test_host_3", 0, 0, 0, 2),
+	hosts := []RateLimitConfig{
+		NewHostConfig("test_host_1", 0, 0, 0, 1),
+		NewHostConfig("test_host_2", 0, 0, 0, 5),
+		NewHostConfig("test_host_3", 0, 0, 0, 2),
 	}
 
 	type HostStatusTest struct {
-		host     host_config.HostConfig
-		status   HostStatus
+		host     RateLimitConfig
+		status   RequestsStatus
 		expected bool
 	}
 
@@ -364,16 +363,16 @@ func Test_IsInBurstPeriod(t *testing.T) {
 }
 
 func Test_WillHitSustainedLimit(t *testing.T) {
-	hosts := []host_config.HostConfig{
-		host_config.NewHostConfig("test_host_1", 1200, 0, 0, 0),
-		host_config.NewHostConfig("test_host_2", 600, 0, 0, 0),
-		host_config.NewHostConfig("test_host_3", 100, 0, 0, 0),
+	hosts := []RateLimitConfig{
+		NewHostConfig("test_host_1", 1200, 0, 0, 0),
+		NewHostConfig("test_host_2", 600, 0, 0, 0),
+		NewHostConfig("test_host_3", 100, 0, 0, 0),
 	}
 
 	type TestHostStatus struct {
-		host     host_config.HostConfig
+		host     RateLimitConfig
 		weight   int
-		status   HostStatus
+		status   RequestsStatus
 		expected bool
 	}
 
@@ -425,16 +424,16 @@ func Test_WillHitSustainedLimit(t *testing.T) {
 }
 
 func Test_WillHitBurstLimit(t *testing.T) {
-	hosts := []host_config.HostConfig{
-		host_config.NewHostConfig("test_host_1", 0, 0, 20, 0),
-		host_config.NewHostConfig("test_host_2", 0, 0, 5, 0),
-		host_config.NewHostConfig("test_host_3", 0, 0, 10, 0),
+	hosts := []RateLimitConfig{
+		NewHostConfig("test_host_1", 0, 0, 20, 0),
+		NewHostConfig("test_host_2", 0, 0, 5, 0),
+		NewHostConfig("test_host_3", 0, 0, 10, 0),
 	}
 
 	type TestHostStatus struct {
-		host     host_config.HostConfig
+		host     RateLimitConfig
 		weight   int
-		status   HostStatus
+		status   RequestsStatus
 		expected bool
 	}
 
