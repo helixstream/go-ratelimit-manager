@@ -6,7 +6,7 @@ jobs:
     working_directory: /go/src/github.com/helixstream/go-ratelimit-manager
     branches:
       only:
-        -circle-ci-8
+        - circle-ci-8
     steps:
       - checkout
       - run:
