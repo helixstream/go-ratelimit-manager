@@ -1,5 +1,12 @@
 package host
 
+/*
+RateLimitConfig struct contains the rate limit information for a specific host
+SustainedRequestLimit -> the number of requests that can be made during the sustained period
+SustainedTimePeriod -> length of sustained period in seconds
+BurstRequestLimit -> the number of requests that can be made during the burst period
+BurstTimePeriod -> length of the burst period in seconds
+*/
 type RateLimitConfig struct {
 	Host                  string //may change to different data type later
 	SustainedRequestLimit int
