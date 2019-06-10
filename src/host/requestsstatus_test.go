@@ -8,8 +8,8 @@ import (
 
 func Test_CheckRequest(t *testing.T) {
 	hosts := []RateLimitConfig{
-		NewHostConfig("test_host_1", 1200, 60, 20, 1),
-		NewHostConfig("test_host_2", 600, 60, 20, 1),
+		NewRateLimitConfig("test_host_1", 1200, 60, 20, 1),
+		NewRateLimitConfig("test_host_2", 600, 60, 20, 1),
 	}
 
 	type HostStatusTest struct {
@@ -26,73 +26,73 @@ func Test_CheckRequest(t *testing.T) {
 			"not in sustained, not in burst",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
 		},
 		{
 			"not in sustained, not in burst",
 			hosts[1],
 			5,
-			NewHostStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
 		},
 		{
 			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 500, 500, 20, now, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 500, 500, 20, now, now-hosts[0].BurstTimePeriod-1),
 		},
 		{
 			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
 			hosts[1],
 			3,
-			NewHostStatus("test_host", 500, 10, 20, now-30, now-hosts[0].BurstTimePeriod),
+			NewRequestsStatus("test_host", 500, 10, 20, now-30, now-hosts[0].BurstTimePeriod),
 		},
 		{
 			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod/2), now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod/2), now-hosts[0].BurstTimePeriod-1),
 		},
 		{
 			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
 			hosts[1],
 			5,
-			NewHostStatus("test_host", 597, 5, 5, now-hosts[0].SustainedTimePeriod+1, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 597, 5, 5, now-hosts[0].SustainedTimePeriod+1, now-hosts[0].BurstTimePeriod-1),
 		},
 		{
 			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
 		},
 		{
 			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
 			hosts[1],
 			5,
-			NewHostStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
 		},
 		{
 			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
 		},
 		{
 			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
 			hosts[1],
 			1,
-			NewHostStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
 		},
 		{
 			"is in sustained, is in burst, will not hit either limit",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 1000, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
 		},
 		{
 			"is in sustained, is in burst, will not hit either limit",
 			hosts[1],
 			3,
-			NewHostStatus("test_host", 400, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 400, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
 		},
 	}
 
@@ -110,8 +110,8 @@ func Test_CheckRequest(t *testing.T) {
 
 func Test_CanMakeRequest(t *testing.T) {
 	hosts := []RateLimitConfig{
-		NewHostConfig("test_host_1", 1200, 60, 20, 1),
-		NewHostConfig("test_host_2", 600, 60, 20, 1),
+		NewRateLimitConfig("test_host_1", 1200, 60, 20, 1),
+		NewRateLimitConfig("test_host_2", 600, 60, 20, 1),
 	}
 
 	type HostStatusTest struct {
@@ -130,96 +130,96 @@ func Test_CanMakeRequest(t *testing.T) {
 			"not is sustained, not in burst, no sus limit, no burst limit",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
-			NewHostStatus("test_host", 0, 0, 1, now, now),
+			NewRequestsStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 0, 0, 1, now, now),
 			true,
 		},
 		{
 			"not is sustained, not in burst, no sus limit, no burst limit",
 			hosts[1],
 			5,
-			NewHostStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
-			NewHostStatus("test_host", 0, 0, 5, now, now),
+			NewRequestsStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 0, 0, 5, now, now),
 			true,
 		},
 		{
 			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 500, 500, 20, now, now-hosts[0].BurstTimePeriod-1),
-			NewHostStatus("test_host", 500, 0, 21, now, now),
+			NewRequestsStatus("test_host", 500, 500, 20, now, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 500, 0, 21, now, now),
 			true,
 		},
 		{
 			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
 			hosts[1],
 			3,
-			NewHostStatus("test_host", 500, 10, 20, now-30, now-hosts[0].BurstTimePeriod),
-			NewHostStatus("test_host", 500, 0, 23, now-30, now),
+			NewRequestsStatus("test_host", 500, 10, 20, now-30, now-hosts[0].BurstTimePeriod),
+			NewRequestsStatus("test_host", 500, 0, 23, now-30, now),
 			true,
 		},
 		{
 			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod/2), now-hosts[0].BurstTimePeriod-1),
-			NewHostStatus("test_host", 1195, 0, 5, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod/2), now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 1195, 0, 5, now-(hosts[0].SustainedTimePeriod/2), now),
 			false,
 		},
 		{
 			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
 			hosts[1],
 			5,
-			NewHostStatus("test_host", 597, 5, 5, now-hosts[0].SustainedTimePeriod+1, now-hosts[0].BurstTimePeriod-1),
-			NewHostStatus("test_host", 597, 0, 5, now-hosts[0].SustainedTimePeriod+1, now),
+			NewRequestsStatus("test_host", 597, 5, 5, now-hosts[0].SustainedTimePeriod+1, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 597, 0, 5, now-hosts[0].SustainedTimePeriod+1, now),
 			false,
 		},
 		{
 			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewHostStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
 			false,
 		},
 		{
 			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
 			hosts[1],
 			5,
-			NewHostStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewHostStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
 			false,
 		},
 		{
 			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewHostStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
 			false,
 		},
 		{
 			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
 			hosts[1],
 			1,
-			NewHostStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewHostStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
 			false,
 		},
 		{
 			"is in sustained, is in burst, will not hit either limit",
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 1000, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewHostStatus("test_host", 1000, 10, 5, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 10, 5, now-(hosts[0].SustainedTimePeriod/2), now),
 			true,
 		},
 		{
 			"is in sustained, is in burst, will not hit either limit",
 			hosts[1],
 			3,
-			NewHostStatus("test_host", 400, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewHostStatus("test_host", 400, 10, 7, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 400, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 400, 10, 7, now-(hosts[0].SustainedTimePeriod/2), now),
 			true,
 		},
 	}
@@ -242,9 +242,9 @@ func Test_CanMakeRequest(t *testing.T) {
 
 func Test_IsInSustainedPeriod(t *testing.T) {
 	hosts := []RateLimitConfig{
-		NewHostConfig("test_host_1", 0, 60, 0, 0),
-		NewHostConfig("test_host_2", 0, 60, 0, 0),
-		NewHostConfig("test_host_3", 0, 45, 0, 0),
+		NewRateLimitConfig("test_host_1", 0, 60, 0, 0),
+		NewRateLimitConfig("test_host_2", 0, 60, 0, 0),
+		NewRateLimitConfig("test_host_3", 0, 45, 0, 0),
 	}
 
 	type HostStatusTest struct {
@@ -258,37 +258,37 @@ func Test_IsInSustainedPeriod(t *testing.T) {
 	testCases := []HostStatusTest{
 		{
 			hosts[0],
-			NewHostStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod-5, 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod-5, 0),
 			false,
 		},
 		{
 			hosts[0],
-			NewHostStatus("test_host", 0, 0, 0, now, 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now, 0),
 			true,
 		},
 		{
 			hosts[0],
-			NewHostStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod, 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod, 0),
 			false,
 		},
 		{
 			hosts[0],
-			NewHostStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod-1, 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod-1, 0),
 			false,
 		},
 		{
 			hosts[1],
-			NewHostStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod-5, 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod-5, 0),
 			false,
 		},
 		{
 			hosts[1],
-			NewHostStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod/7), 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod/7), 0),
 			true,
 		},
 		{
 			hosts[2],
-			NewHostStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod/2), 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod/2), 0),
 			true,
 		},
 	}
@@ -303,9 +303,9 @@ func Test_IsInSustainedPeriod(t *testing.T) {
 
 func Test_IsInBurstPeriod(t *testing.T) {
 	hosts := []RateLimitConfig{
-		NewHostConfig("test_host_1", 0, 0, 0, 1),
-		NewHostConfig("test_host_2", 0, 0, 0, 5),
-		NewHostConfig("test_host_3", 0, 0, 0, 2),
+		NewRateLimitConfig("test_host_1", 0, 0, 0, 1),
+		NewRateLimitConfig("test_host_2", 0, 0, 0, 5),
+		NewRateLimitConfig("test_host_3", 0, 0, 0, 2),
 	}
 
 	type HostStatusTest struct {
@@ -319,37 +319,37 @@ func Test_IsInBurstPeriod(t *testing.T) {
 	testCases := []HostStatusTest{
 		{
 			hosts[0],
-			NewHostStatus("test_host", 0, 0, 0, 0, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-hosts[0].BurstTimePeriod-1),
 			false,
 		},
 		{
 			hosts[0],
-			NewHostStatus("test_host", 0, 0, 0, 0, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-hosts[0].BurstTimePeriod-1),
 			false,
 		},
 		{
 			hosts[0],
-			NewHostStatus("test_host", 0, 0, 0, 0, now),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now),
 			true,
 		},
 		{
 			hosts[0],
-			NewHostStatus("test_host", 0, 0, 0, 0, now),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now),
 			true,
 		},
 		{
 			hosts[1],
-			NewHostStatus("test_host", 0, 0, 0, 0, now-3),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-3),
 			true,
 		},
 		{
 			hosts[1],
-			NewHostStatus("test_host", 0, 0, 0, 0, now-hosts[1].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-hosts[1].BurstTimePeriod-1),
 			false,
 		},
 		{
 			hosts[2],
-			NewHostStatus("test_host", 0, 0, 0, 0, now-1),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-1),
 			true,
 		},
 	}
@@ -364,9 +364,9 @@ func Test_IsInBurstPeriod(t *testing.T) {
 
 func Test_WillHitSustainedLimit(t *testing.T) {
 	hosts := []RateLimitConfig{
-		NewHostConfig("test_host_1", 1200, 0, 0, 0),
-		NewHostConfig("test_host_2", 600, 0, 0, 0),
-		NewHostConfig("test_host_3", 100, 0, 0, 0),
+		NewRateLimitConfig("test_host_1", 1200, 0, 0, 0),
+		NewRateLimitConfig("test_host_2", 600, 0, 0, 0),
+		NewRateLimitConfig("test_host_3", 100, 0, 0, 0),
 	}
 
 	type TestHostStatus struct {
@@ -380,37 +380,37 @@ func Test_WillHitSustainedLimit(t *testing.T) {
 		{
 			hosts[0],
 			1,
-			NewHostStatus("test_host", 1200, 0, 0, 0, 0),
+			NewRequestsStatus("test_host", 1200, 0, 0, 0, 0),
 			true,
 		},
 		{
 			hosts[1],
 			7,
-			NewHostStatus("test_host", 595, 0, 1, 0, 0),
+			NewRequestsStatus("test_host", 595, 0, 1, 0, 0),
 			true,
 		},
 		{
 			hosts[2],
 			9,
-			NewHostStatus("test_host", 90, 0, 2, 0, 0),
+			NewRequestsStatus("test_host", 90, 0, 2, 0, 0),
 			true,
 		},
 		{
 			hosts[0],
 			20,
-			NewHostStatus("test_host", 1100, 0, 80, 0, 0),
+			NewRequestsStatus("test_host", 1100, 0, 80, 0, 0),
 			false,
 		},
 		{
 			hosts[1],
 			1,
-			NewHostStatus("test_host", 35, 0, 40, 0, 0),
+			NewRequestsStatus("test_host", 35, 0, 40, 0, 0),
 			false,
 		},
 		{
 			hosts[2],
 			15,
-			NewHostStatus("test_host", 85, 0, 0, 0, 0),
+			NewRequestsStatus("test_host", 85, 0, 0, 0, 0),
 			false,
 		},
 	}
@@ -425,9 +425,9 @@ func Test_WillHitSustainedLimit(t *testing.T) {
 
 func Test_WillHitBurstLimit(t *testing.T) {
 	hosts := []RateLimitConfig{
-		NewHostConfig("test_host_1", 0, 0, 20, 0),
-		NewHostConfig("test_host_2", 0, 0, 5, 0),
-		NewHostConfig("test_host_3", 0, 0, 10, 0),
+		NewRateLimitConfig("test_host_1", 0, 0, 20, 0),
+		NewRateLimitConfig("test_host_2", 0, 0, 5, 0),
+		NewRateLimitConfig("test_host_3", 0, 0, 10, 0),
 	}
 
 	type TestHostStatus struct {
@@ -441,37 +441,37 @@ func Test_WillHitBurstLimit(t *testing.T) {
 		{
 			hosts[0],
 			1,
-			NewHostStatus("testHost", 0, 18, 2, 0, 0),
+			NewRequestsStatus("testHost", 0, 18, 2, 0, 0),
 			true,
 		},
 		{
 			hosts[1],
 			3,
-			NewHostStatus("testHost", 0, 3, 0, 0, 0),
+			NewRequestsStatus("testHost", 0, 3, 0, 0, 0),
 			true,
 		},
 		{
 			hosts[2],
 			5,
-			NewHostStatus("testHost", 0, 5, 1, 0, 0),
+			NewRequestsStatus("testHost", 0, 5, 1, 0, 0),
 			true,
 		},
 		{
 			hosts[0],
 			1,
-			NewHostStatus("testHost", 0, 10, 8, 0, 0),
+			NewRequestsStatus("testHost", 0, 10, 8, 0, 0),
 			false,
 		},
 		{
 			hosts[1],
 			1,
-			NewHostStatus("testHost", 0, 0, 0, 0, 0),
+			NewRequestsStatus("testHost", 0, 0, 0, 0, 0),
 			false,
 		},
 		{
 			hosts[2],
 			1,
-			NewHostStatus("testHost", 0, 9, 0, 0, 0),
+			NewRequestsStatus("testHost", 0, 9, 0, 0, 0),
 			false,
 		},
 	}

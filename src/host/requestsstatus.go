@@ -138,7 +138,7 @@ func (h *RequestsStatus) timeUntilEndOfBurst(host RateLimitConfig) (milliseconds
 	return endMS - nowMS
 }
 
-func NewHostStatus(host string, sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64) RequestsStatus {
+func NewRequestsStatus(host string, sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64) RequestsStatus {
 	return RequestsStatus{host, sustainedRequests, burstRequests, pending, firstSustainedRequests, firstBurstRequest}
 }
 
