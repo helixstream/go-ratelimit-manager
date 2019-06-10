@@ -19,9 +19,10 @@ func Test_CanMakeRequestRecursive(t *testing.T) {
 		status        HostStatus
 	}
 
-	now := int(time.Now().UTC().Unix())
+	now := time.Now().UTC().Unix()
 
-	statuses := []HostStatusTest{
+	testCases := []HostStatusTest{
+		//not in sustained, not in burst
 		{
 			hosts[0],
 			1,
@@ -89,8 +90,8 @@ func Test_CanMakeRequestRecursive(t *testing.T) {
 		},
 	}
 
-	for i := 0; i < len(statuses); i++ {
-		canMake := statuses[i].status.CheckRequest(statuses[i].requestWeight, statuses[i].host)
+	for i := 0; i < len(testCases); i++ {
+		canMake := testCases[i].status.CheckRequest(testCases[i].requestWeight, testCases[i].host)
 
 		if !canMake {
 			t.Errorf("Loop: %v. Expected true for Can Make Request Recursive, got: %v", i, canMake)
@@ -113,9 +114,9 @@ func Test_CanMakeRequest(t *testing.T) {
 		expectedCanMakeRequest bool
 	}
 
-	now := int(time.Now().UTC().Unix())
+	now := time.Now().UTC().Unix()
 
-	statuses := []HostStatusTest{
+	testCases := []HostStatusTest{
 		//not is sustained, not in burst, no sus limit, no burst limit
 		{
 			hosts[0],
@@ -208,15 +209,15 @@ func Test_CanMakeRequest(t *testing.T) {
 		},
 	}
 
-	for i := 0; i < len(statuses); i++ {
-		canMake, _ := statuses[i].status.CanMakeRequest(statuses[i].requestWeight, now, statuses[i].host)
-		if canMake != statuses[i].expectedCanMakeRequest {
+	for i := 0; i < len(testCases); i++ {
+		canMake, _ := testCases[i].status.CanMakeRequest(testCases[i].requestWeight, now, testCases[i].host)
+		if canMake != testCases[i].expectedCanMakeRequest {
 			//error if the boolean the function returns does not match the expected value
-			t.Errorf("Loop: %v. Expected ability to make request: %v, got: %v", i, statuses[i].expectedCanMakeRequest, canMake)
+			t.Errorf("Loop: %v. Expected ability to make request: %v, got: %v", i, testCases[i].expectedCanMakeRequest, canMake)
 		}
-		if statuses[i].status != statuses[i].expectedStatus {
-			expected := statuses[i].expectedStatus
-			status := statuses[i].status
+		if testCases[i].status != testCases[i].expectedStatus {
+			expected := testCases[i].expectedStatus
+			status := testCases[i].status
 			//causes an error if the expected host status is different than the modified host status
 			t.Errorf("Loop: %v, Expected %v sustained requests, got: %v. Expected %v burst requests, got: %v. Expected %v pending requests, got: %v. Expected %v first sustained request, got: %v, Expected %v first burst request, got; %v",
 				i, expected.GetSustainedRequests(), status.GetSustainedRequests(), expected.GetBurstRequests(), status.GetBurstRequests(), expected.GetPendingRequests(), status.GetPendingRequests(), expected.GetFirstSustainedRequest(),
@@ -239,7 +240,7 @@ func TestHostStatus_IsInSustainedPeriod(t *testing.T) {
 		expected bool
 	}
 
-	now := int(time.Now().UTC().Unix())
+	now := time.Now().UTC().Unix()
 
 	testCases := []HostStatusTest{
 		{
@@ -306,7 +307,7 @@ func TestHostStatus_IsInBurstPeriod(t *testing.T) {
 		expected bool
 	}
 
-	now := int(time.Now().UTC().Unix())
+	now := time.Now().UTC().Unix()
 
 	testCases := []HostStatusTest{
 		{
@@ -476,10 +477,3 @@ func TestHostStatus_WillHitBurstLimit(t *testing.T) {
 	}
 }
 
-func TestHostStatus_WaitUntilEndOfBurst(t *testing.T) {
-
-}
-
-func TestHostStatus_WaitUntilEndOfSustained(t *testing.T) {
-
-}
