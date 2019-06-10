@@ -4,24 +4,17 @@ import (
 	"time"
 )
 
-/*
-RequestsStatus struct contains all info pertaining to the cumulative requests made to a specific host
-SustainedRequests -> total number of completed requests made during the current sustained period
-BurstRequests -> total number of completed requests made during the current burst period
-PendingRequests -> number of requests that have started but have not completed
-FirstSustainedRequest -> timestamp that represents when the sustained period began
-FirstBurstRequest -> timestamp that represents when the burst period began
-*/
+//RequestsStatus struct contains all info pertaining to the cumulative requests made to a specific host
 type RequestsStatus struct {
 	Host                  string
-	SustainedRequests     int
-	BurstRequests         int
-	PendingRequests       int
-	FirstSustainedRequest int64
-	FirstBurstRequest     int64
+	SustainedRequests     int   //total number of completed requests made during the current sustained period
+	BurstRequests         int   //total number of completed requests made during the current burst period
+	PendingRequests       int   //number of requests that have started but have not completed
+	FirstSustainedRequest int64 //timestamp that represents when the sustained period began
+	FirstBurstRequest     int64 //timestamp that represents when the burst period began
 }
 
-//recursively calls CanMakeRequest until a request can be  made
+//CheckRequest recursively calls CanMakeRequest until a request can be  made
 //returns true when a request can be made
 //if a request cannot be made it waits the correct amount of time and check again to see if a request can be made
 func (h *RequestsStatus) CheckRequest(requestWeight int, host RateLimitConfig) bool {
