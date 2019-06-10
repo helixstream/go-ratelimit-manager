@@ -1,0 +1,14 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.12
+    working_directory: /go/src/github.com/helixstream/go-ratelimit-manager
+    steps:
+      - checkout
+      - run:
+          name: Go Get
+          command: go get -v -t -d ./...
+      - run:
+          name: Tests
+          command: go test -v -race ./...
