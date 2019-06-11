@@ -22,7 +22,6 @@ type RequestsStatus struct {
 //example: status:com.binance.api
 //example: config:com.binance.api
 
-
 //DoesKeyExist checks the database to see if a non nil value is
 //stored at the specific RequestStatus key
 func (h *RequestsStatus) DoesKeyExist(p *redis.Pool) bool {

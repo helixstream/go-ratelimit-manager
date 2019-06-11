@@ -26,7 +26,7 @@ var pool = &redis.Pool{
 func Test_PING(t *testing.T) {
 	resp := isConnectedToRedis(pool)
 
-	if resp != true{
+	if resp != true {
 		t.Error("Could not connect to Redis.")
 	}
 }
