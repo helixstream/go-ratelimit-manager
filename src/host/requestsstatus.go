@@ -1,6 +1,10 @@
 package host
 
 import (
+	"encoding/json"
+	"fmt"
+	"github.com/gomodule/redigo/redis"
+	"github.com/youtube/vitess/go/vt/log"
 	"time"
 )
 
@@ -12,6 +16,104 @@ type RequestsStatus struct {
 	PendingRequests       int   //number of requests that have started but have not completed
 	FirstSustainedRequest int64 //timestamp that represents when the sustained period began
 	FirstBurstRequest     int64 //timestamp that represents when the burst period began
+}
+
+//key convention redis: struct:host
+//example: status:com.binance.api
+//example: config:com.binance.api
+
+
+//DoesKeyExist checks the database to see if a non nil value is
+//stored at the specific RequestStatus key
+func (h *RequestsStatus) DoesKeyExist(p *redis.Pool) bool {
+	c := p.Get()
+
+	resp, err := c.Do("GET", "status:"+h.Host)
+	if err != nil {
+		log.Fatal(err)
+	}
+	//converts resp to a string
+	stringResp, err := redis.String(resp, err)
+	if stringResp != "" {
+		return true
+	}
+
+	return false
+}
+
+//SaveStatus saves the values of the RequestStatus struct to
+//the redis database
+func (h *RequestsStatus) SaveStatus(p *redis.Pool) {
+	c := p.Get()
+	json, err := h.ConvertToJSON()
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = c.Do("SET", "status:"+h.Host, json)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = c.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+//GetStatus sets the struct's values to the values in the database
+func (h *RequestsStatus) GetStatus(p *redis.Pool) {
+	c := p.Get()
+
+	resp, err := c.Do("GET", "status:"+h.Host)
+	//converts resp to a slice of bytes
+	bytes, err := redis.Bytes(resp, err)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = h.ConvertFromJSON(bytes)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = c.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+//ConvertToJSON converts the contents of the struct to json and
+//returns a slice of bytes to be saved to the database
+func (h *RequestsStatus) ConvertToJSON() ([]byte, error) {
+	return json.Marshal(h)
+}
+
+//ConvertFromJSON takes a slice of bytes and converts it to JSON
+//and then sets the values of the struct based on that json. Used
+//to update struct data from database
+func (h *RequestsStatus) ConvertFromJSON(data []byte) error {
+	if err := json.Unmarshal(data, &h); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+//isConnectedToRedis pings the redis database and returns
+//whether there is a successful connection
+func isConnectedToRedis(p *redis.Pool) bool {
+	c := p.Get()
+	resp, err := c.Do("PING")
+	pingResp, err := redis.String(resp, err)
+	if err != nil {
+		fmt.Errorf("%v", err)
+	}
+
+	if pingResp != "PONG" {
+		return false
+	}
+
+	return true
 }
 
 //CheckRequest recursively calls CanMakeRequest until a request can be  made
