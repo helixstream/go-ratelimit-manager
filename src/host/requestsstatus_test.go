@@ -232,12 +232,21 @@ func Test_CanMakeRequest(t *testing.T) {
 				t.Errorf("Loop: %v. Expected ability to make request: %v, got: %v", i, testCases[i].expectedCanMakeRequest, canMake)
 			}
 			if diff := deep.Equal(testCases[i].status, testCases[i].expectedStatus); diff != nil {
-				t.Errorf("Loop: %v. %v", i, diff)
+				if Abs(testCases[i].status.FirstBurstRequest-testCases[i].expectedStatus.FirstBurstRequest) < 2 && Abs(testCases[i].status.FirstSustainedRequest-testCases[i].expectedStatus.FirstSustainedRequest) < 2 {
+					t.Errorf("Loop: %v. %v", i, diff)
+				}
 			}
 
 		})
 
 	}
+}
+
+func Abs(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 func Test_IsInSustainedPeriod(t *testing.T) {
