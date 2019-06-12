@@ -234,8 +234,8 @@ func Test_CanMakeRequest(t *testing.T) {
 					t.Errorf("Loop: %v. Expected ability to make request: %v, got: %v", i, testCases[i].expectedCanMakeRequest, canMake)
 				}
 				if diff := deep.Equal(testCases[i].status, testCases[i].expectedStatus); diff != nil {
-					t.Log(Abs(testCases[i].status.FirstBurstRequest-testCases[i].expectedStatus.FirstBurstRequest) < 2)
-					if Abs(testCases[i].status.FirstBurstRequest-testCases[i].expectedStatus.FirstBurstRequest) > 2 {
+
+					if Abs(testCases[i].status.FirstBurstRequest-testCases[i].expectedStatus.FirstBurstRequest) > 10 {
 						t.Errorf("Loop: %v. %v", i, diff)
 					}
 				}
