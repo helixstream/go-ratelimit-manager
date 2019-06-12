@@ -136,19 +136,19 @@ func (h *RequestsStatus) CheckRequest(requestWeight int, host RateLimitConfig) b
 //returns true, 0 if request can be made
 //returns false and the number of milliseconds to wait if a request cannot be made
 func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig) (bool, int64) {
-
+	now := GetUnixTimeMilliseconds()
 	//if request is in the current burst period
-	if h.isInBurstPeriod(host) {
+	if h.isInBurstPeriod(now, host) {
 		//will the request push us over the burst limit
 		if h.willHitBurstLimit(requestWeight, host) {
 			//is so do not make the request and wait
-			return false, h.timeUntilEndOfBurst(host)
+			return false, h.timeUntilEndOfBurst(now, host)
 		}
 
 		//determines if the request will go over the sustained limit
 		if h.willHitSustainedLimit(requestWeight, host) {
 			//is so do not make the request and wait
-			return false, h.timeUntilEndOfSustained(host)
+			return false, h.timeUntilEndOfSustained(now, host)
 		}
 
 		//did not hit either burst or sustained limit
@@ -159,13 +159,13 @@ func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig)
 		//not in burst period, but in sustained period
 	}
 
-	if h.isInSustainedPeriod(host) {
+	if h.isInSustainedPeriod(now, host) {
 		//reset burst to 0 and sets start of new burst period to now
 		h.SetBurstRequests(0)
 		h.SetFirstBurstRequest(GetUnixTimeMilliseconds())
 
 		if h.willHitSustainedLimit(requestWeight, host) {
-			return false, h.timeUntilEndOfSustained(host)
+			return false, h.timeUntilEndOfSustained(now, host)
 		}
 
 		//can make request because did not hit sustained limit
@@ -179,8 +179,8 @@ func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig)
 	h.SetSustainedRequests(0)
 	h.SetBurstRequests(0)
 	//set start of both sustained and burst to now
-	h.SetFirstSustainedRequest(GetUnixTimeMilliseconds())
-	h.SetFirstBurstRequest(GetUnixTimeMilliseconds())
+	h.SetFirstSustainedRequest(now)
+	h.SetFirstBurstRequest(now)
 	//increment the number of pending requests by the weight of the request
 	h.IncrementPendingRequests(requestWeight)
 
@@ -189,15 +189,15 @@ func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig)
 }
 
 //isInSustainedPeriod checks if the current request is in the sustained period
-func (h *RequestsStatus) isInSustainedPeriod(hostConfig RateLimitConfig) bool {
-	timeSincePeriodStart := GetUnixTimeMilliseconds() - h.GetFirstSustainedRequest()
+func (h *RequestsStatus) isInSustainedPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
+	timeSincePeriodStart := currentTime - h.GetFirstSustainedRequest()
 	//								converts seconds to milliseconds
 	return timeSincePeriodStart < hostConfig.SustainedTimePeriod*1000 && timeSincePeriodStart >= 0
 }
 
 //isInBurstPeriod checks if the current request is in the burst period
-func (h *RequestsStatus) isInBurstPeriod(hostConfig RateLimitConfig) bool {
-	timeSincePeriodStart := GetUnixTimeMilliseconds() - h.GetFirstBurstRequest()
+func (h *RequestsStatus) isInBurstPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
+	timeSincePeriodStart := currentTime - h.GetFirstBurstRequest()
 	//								converts seconds to milliseconds
 	return timeSincePeriodStart < hostConfig.BurstTimePeriod*1000 && timeSincePeriodStart >= 0
 }
@@ -221,21 +221,19 @@ func (h *RequestsStatus) willHitBurstLimit(requestWeight int, host RateLimitConf
 }
 
 //timeUntilEndOfSustained calculates the time in milliseconds until the end of the sustained period
-func (h *RequestsStatus) timeUntilEndOfSustained(host RateLimitConfig) (millisecondsToWait int64) {
-	//milliseconds  							converts from seconds to milliseconds
+func (h *RequestsStatus) timeUntilEndOfSustained(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
+	// 											converts from seconds to milliseconds
 	endOfPeriod := h.GetFirstSustainedRequest() + (host.SustainedTimePeriod * 1000)
-	now := GetUnixTimeMilliseconds()
 
-	return endOfPeriod - now
+	return endOfPeriod - currentTime
 }
 
 //timeUntilEndOfBurst calculates the time in milliseconds until the end of the burst period
-func (h *RequestsStatus) timeUntilEndOfBurst(host RateLimitConfig) (millisecondsToWait int64) {
-	//milliseconds  						converts from seconds to milliseconds
+func (h *RequestsStatus) timeUntilEndOfBurst(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
+	//  								converts from seconds to milliseconds
 	endOfPeriod := h.GetFirstBurstRequest() + (host.BurstTimePeriod * 1000)
-	now := GetUnixTimeMilliseconds()
 
-	return endOfPeriod - now
+	return endOfPeriod - currentTime
 }
 
 func GetUnixTimeMilliseconds() int64 {

@@ -2,8 +2,5 @@ version: '2'
 services:
   redis:
     image: redis
-    command: redis-server /davidklingler/Desktop/redis.conf
-    volumes:
-      - ./redis.conf:/davidklingler/Desktop/redis.conf
     ports:
       - "6379:6379"
