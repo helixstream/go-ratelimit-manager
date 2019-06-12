@@ -254,6 +254,86 @@ func Abs(x int64) int64 {
 	return x
 }
 
+func Test_RequestFinished(t *testing.T) {
+
+	type TestRequestsStatus struct {
+		requestWeight int
+		status RequestsStatus
+		expected RequestsStatus
+	}
+
+	testCases := []TestRequestsStatus{
+		{
+			1,
+			NewRequestsStatus("testhost", 0, 0, 5, 0, 0),
+			NewRequestsStatus("testhost", 1, 1, 4, 0, 0),
+		},
+		{
+			3,
+			NewRequestsStatus("testhost", 35, 2, 19, 0, 0),
+			NewRequestsStatus("testhost", 38, 5, 16, 0, 0),
+		},
+		{
+			2,
+			NewRequestsStatus("testhost", 10, 5, 1, 0, 0),
+			NewRequestsStatus("testhost", 10, 5, 1, 0, 0),
+		},
+		{
+			2,
+			NewRequestsStatus("testhost", 10, 5, 2, 0, 0),
+			NewRequestsStatus("testhost", 12, 7, 0, 0, 0),
+		},
+	}
+
+	for i := 0; i < len(testCases); i++ {
+		testCases[i].status.RequestFinished(testCases[i].requestWeight)
+
+		if diff := deep.Equal(testCases[i].status, testCases[i].expected); diff != nil {
+			t.Errorf("Loop: %v. %v. ", i, diff)
+		}
+	}
+
+}
+
+func Test_RequestCancelled(t *testing.T) {
+	type TestRequestsStatus struct {
+		requestWeight int
+		status RequestsStatus
+		expected RequestsStatus
+	}
+
+	testCases := []TestRequestsStatus{
+		{
+			1,
+			NewRequestsStatus("testhost", 0, 0, 5, 0, 0),
+			NewRequestsStatus("testhost", 0, 0, 4, 0, 0),
+		},
+		{
+			3,
+			NewRequestsStatus("testhost", 35, 2, 19, 0, 0),
+			NewRequestsStatus("testhost", 35, 2, 16, 0, 0),
+		},
+		{
+			2,
+			NewRequestsStatus("testhost", 10, 5, 1, 0, 0),
+			NewRequestsStatus("testhost", 10, 5, 1, 0, 0),
+		},
+		{
+			2,
+			NewRequestsStatus("testhost", 10, 5, 2, 0, 0),
+			NewRequestsStatus("testhost", 10, 5, 0, 0, 0),
+		},
+	}
+
+	for i := 0; i < len(testCases); i++ {
+		testCases[i].status.RequestCancelled(testCases[i].requestWeight)
+
+		if diff := deep.Equal(testCases[i].status, testCases[i].expected); diff != nil {
+			t.Errorf("Loop: %v. %v. ", i, diff)
+		}
+	}
+}
+
 func Test_IsInSustainedPeriod(t *testing.T) {
 	hosts := []RateLimitConfig{
 		NewRateLimitConfig("test_host_1", 0, 60, 0, 0),
