@@ -3,7 +3,6 @@ package host
 import (
 	"github.com/go-test/deep"
 	"testing"
-	"time"
 )
 
 func Test_CheckRequest(t *testing.T) {
@@ -19,80 +18,80 @@ func Test_CheckRequest(t *testing.T) {
 		status        RequestsStatus
 	}
 
-	now := time.Now().UTC().Unix()
+	now := GetUnixTimeMilliseconds()
 
 	testCases := []HostStatusTest{
 		{
 			"not in sustained, not in burst",
 			hosts[0],
 			1,
-			NewRequestsStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 500, 500, 0, now-(hosts[0].SustainedTimePeriod*1000)-5, now-(hosts[0].BurstTimePeriod*1000)-1),
 		},
 		{
 			"not in sustained, not in burst",
 			hosts[1],
 			5,
-			NewRequestsStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 500, 500, 0, now-(hosts[0].SustainedTimePeriod*1000)-5, now-(hosts[0].BurstTimePeriod*1000)-1),
 		},
 		{
 			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
 			hosts[0],
 			1,
-			NewRequestsStatus("test_host", 500, 500, 20, now, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 500, 500, 20, now, now-(hosts[0].BurstTimePeriod*1000)),
 		},
 		{
 			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
 			hosts[1],
 			3,
-			NewRequestsStatus("test_host", 500, 10, 20, now-30, now-hosts[0].BurstTimePeriod),
+			NewRequestsStatus("test_host", 500, 10, 20, now-3000, now-(hosts[0].BurstTimePeriod*1000)),
 		},
 		{
 			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
 			hosts[0],
 			1,
-			NewRequestsStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod/2), now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod*1000)+2000, now-(hosts[0].BurstTimePeriod*1000)-1000),
 		},
 		{
 			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
 			hosts[1],
 			5,
-			NewRequestsStatus("test_host", 597, 5, 5, now-hosts[0].SustainedTimePeriod+1, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 597, 5, 5, now-(hosts[0].SustainedTimePeriod*1000)+7000, now-(hosts[0].BurstTimePeriod*1000)-100),
 		},
 		{
 			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
 			hosts[0],
 			1,
-			NewRequestsStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
 		},
 		{
 			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
 			hosts[1],
 			5,
-			NewRequestsStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
 		},
 		{
 			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
 			hosts[0],
 			1,
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
 		},
 		{
 			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
 			hosts[1],
 			1,
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod*1000)+1000, now),
 		},
 		{
 			"is in sustained, is in burst, will not hit either limit",
 			hosts[0],
 			1,
-			NewRequestsStatus("test_host", 1000, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 1000, 10, 4, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
 		},
 		{
 			"is in sustained, is in burst, will not hit either limit",
 			hosts[1],
 			3,
-			NewRequestsStatus("test_host", 400, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
+			NewRequestsStatus("test_host", 400, 10, 4, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
 		},
 	}
 
@@ -122,122 +121,137 @@ func Test_CanMakeRequest(t *testing.T) {
 		expectedStatus         RequestsStatus
 		expectedCanMakeRequest bool
 	}
+	//runs the test 10 times so ensure that firstBurstRequest is always within an acceptable range
+	for i := 0; i < 10; i++ {
 
-	now := time.Now().UTC().Unix()
+		now := GetUnixTimeMilliseconds()
 
-	testCases := []HostStatusTest{
-		{
-			"not is sustained, not in burst, no sus limit, no burst limit",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
-			NewRequestsStatus("test_host", 0, 0, 1, now, now),
-			true,
-		},
-		{
-			"not is sustained, not in burst, no sus limit, no burst limit",
-			hosts[1],
-			5,
-			NewRequestsStatus("test_host", 500, 500, 0, now-hosts[0].SustainedTimePeriod-5, now-hosts[0].BurstTimePeriod-1),
-			NewRequestsStatus("test_host", 0, 0, 5, now, now),
-			true,
-		},
-		{
-			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 500, 500, 20, now, now-hosts[0].BurstTimePeriod-1),
-			NewRequestsStatus("test_host", 500, 0, 21, now, now),
-			true,
-		},
-		{
-			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
-			hosts[1],
-			3,
-			NewRequestsStatus("test_host", 500, 10, 20, now-30, now-hosts[0].BurstTimePeriod),
-			NewRequestsStatus("test_host", 500, 0, 23, now-30, now),
-			true,
-		},
-		{
-			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod/2), now-hosts[0].BurstTimePeriod-1),
-			NewRequestsStatus("test_host", 1195, 0, 5, now-(hosts[0].SustainedTimePeriod/2), now),
-			false,
-		},
-		{
-			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
-			hosts[1],
-			5,
-			NewRequestsStatus("test_host", 597, 5, 5, now-hosts[0].SustainedTimePeriod+1, now-hosts[0].BurstTimePeriod-1),
-			NewRequestsStatus("test_host", 597, 0, 5, now-hosts[0].SustainedTimePeriod+1, now),
-			false,
-		},
-		{
-			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewRequestsStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod/2), now),
-			false,
-		},
-		{
-			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
-			hosts[1],
-			5,
-			NewRequestsStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewRequestsStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod/2), now),
-			false,
-		},
-		{
-			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
-			false,
-		},
-		{
-			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
-			hosts[1],
-			1,
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod/2), now),
-			false,
-		},
-		{
-			"is in sustained, is in burst, will not hit either limit",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1000, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewRequestsStatus("test_host", 1000, 10, 5, now-(hosts[0].SustainedTimePeriod/2), now),
-			true,
-		},
-		{
-			"is in sustained, is in burst, will not hit either limit",
-			hosts[1],
-			3,
-			NewRequestsStatus("test_host", 400, 10, 4, now-(hosts[0].SustainedTimePeriod/2), now),
-			NewRequestsStatus("test_host", 400, 10, 7, now-(hosts[0].SustainedTimePeriod/2), now),
-			true,
-		},
+		testCases := []HostStatusTest{
+			{
+				"not is sustained, not in burst, no sus limit, no burst limit",
+				hosts[0],
+				1,
+				NewRequestsStatus("test_host", 500, 500, 0, now-(hosts[0].SustainedTimePeriod*1000)-50, now-(hosts[0].BurstTimePeriod*1000)-100),
+				NewRequestsStatus("test_host", 0, 0, 1, now, now),
+				true,
+			},
+			{
+				"not is sustained, not in burst, no sus limit, no burst limit",
+				hosts[1],
+				5,
+				NewRequestsStatus("test_host", 500, 500, 0, now-(hosts[1].SustainedTimePeriod*1000)-500, now-(hosts[0].BurstTimePeriod*1000)-100),
+				NewRequestsStatus("test_host", 0, 0, 5, now, now),
+				true,
+			},
+			{
+				"is in sustained, not in burst, no sustained limit, burst limit does not matter",
+				hosts[0],
+				1,
+				NewRequestsStatus("test_host", 500, 500, 20, now, now-(hosts[0].BurstTimePeriod*1000)-100),
+				NewRequestsStatus("test_host", 500, 0, 21, now, now),
+				true,
+			},
+			{
+				"is in sustained, not in burst, no sustained limit, burst limit does not matter",
+				hosts[1],
+				3,
+				NewRequestsStatus("test_host", 500, 10, 20, now-30000, now-(hosts[0].BurstTimePeriod*1000)),
+				NewRequestsStatus("test_host", 500, 0, 23, now-30000, now),
+				true,
+			},
+			{
+				"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
+				hosts[0],
+				1,
+				NewRequestsStatus("test_host", 1195, 5, 5, now-((hosts[0].SustainedTimePeriod*1000)/2), now-(hosts[0].BurstTimePeriod*1000)-100),
+				NewRequestsStatus("test_host", 1195, 0, 5, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				false,
+			},
+			{
+				"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
+				hosts[1],
+				5,
+				NewRequestsStatus("test_host", 597, 5, 5, now-(hosts[1].SustainedTimePeriod*1000)+100, now-(hosts[0].BurstTimePeriod*1000)-100),
+				NewRequestsStatus("test_host", 597, 0, 5, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
+				false,
+			},
+			{
+				"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
+				hosts[0],
+				1,
+				NewRequestsStatus("test_host", 1000, 18, 2, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				NewRequestsStatus("test_host", 1000, 18, 2, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				false,
+			},
+			{
+				"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
+				hosts[1],
+				5,
+				NewRequestsStatus("test_host", 1000, 15, 1, now-((hosts[1].SustainedTimePeriod*1000)/2), now),
+				NewRequestsStatus("test_host", 1000, 15, 1, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				false,
+			},
+			{
+				"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
+				hosts[0],
+				1,
+				NewRequestsStatus("test_host", 1195, 8, 6, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				NewRequestsStatus("test_host", 1195, 8, 6, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				false,
+			},
+			{
+				"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
+				hosts[1],
+				1,
+				NewRequestsStatus("test_host", 1195, 8, 6, now-((hosts[1].SustainedTimePeriod*1000)/2), now),
+				NewRequestsStatus("test_host", 1195, 8, 6, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				false,
+			},
+			{
+				"is in sustained, is in burst, will not hit either limit",
+				hosts[0],
+				1,
+				NewRequestsStatus("test_host", 1000, 10, 4, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				NewRequestsStatus("test_host", 1000, 10, 5, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				true,
+			},
+			{
+				"is in sustained, is in burst, will not hit either limit",
+				hosts[1],
+				3,
+				NewRequestsStatus("test_host", 400, 10, 4, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
+				NewRequestsStatus("test_host", 400, 10, 7, now-((hosts[1].SustainedTimePeriod*1000)/2), now),
+				true,
+			},
+		}
+
+		for i := 0; i < len(testCases); i++ {
+			t.Run(testCases[i].name, func(t *testing.T) {
+				canMake, _ := testCases[i].status.CanMakeRequest(testCases[i].requestWeight, testCases[i].host)
+
+				if canMake != testCases[i].expectedCanMakeRequest {
+					//error if the boolean the function returns does not match the expected value
+					t.Errorf("Loop: %v. Expected ability to make request: %v, got: %v", i, testCases[i].expectedCanMakeRequest, canMake)
+				}
+				if diff := deep.Equal(testCases[i].status, testCases[i].expectedStatus); diff != nil {
+					//because firstBurstRequest is a millisecond timestamp, it is too small of a unit to predict exactly
+					//this line makes sure that firstBurstRequest is within a range of 20ms
+					if Abs(testCases[i].status.FirstBurstRequest-testCases[i].expectedStatus.FirstBurstRequest) > 10 {
+						t.Errorf("Loop: %v. %v", i, diff)
+					}
+				}
+
+			})
+
+		}
 	}
+}
 
-	for i := 0; i < len(testCases); i++ {
-		t.Run(testCases[i].name, func(t *testing.T) {
-			canMake, _ := testCases[i].status.CanMakeRequest(testCases[i].requestWeight, now, testCases[i].host)
-			if canMake != testCases[i].expectedCanMakeRequest {
-				//error if the boolean the function returns does not match the expected value
-				t.Errorf("Loop: %v. Expected ability to make request: %v, got: %v", i, testCases[i].expectedCanMakeRequest, canMake)
-			}
-			if diff := deep.Equal(testCases[i].status, testCases[i].expectedStatus); diff != nil {
-				t.Errorf("Loop: %v. %v", i, diff)
-			}
-
-		})
-
+func Abs(x int64) int64 {
+	if x < 0 {
+		return -x
 	}
+	return x
 }
 
 func Test_IsInSustainedPeriod(t *testing.T) {
@@ -253,12 +267,12 @@ func Test_IsInSustainedPeriod(t *testing.T) {
 		expected bool
 	}
 
-	now := time.Now().UTC().Unix()
+	now := GetUnixTimeMilliseconds()
 
 	testCases := []HostStatusTest{
 		{
 			hosts[0],
-			NewRequestsStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod-5, 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod*1000), 0),
 			false,
 		},
 		{
@@ -268,33 +282,33 @@ func Test_IsInSustainedPeriod(t *testing.T) {
 		},
 		{
 			hosts[0],
-			NewRequestsStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod, 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod*1000), 0),
 			false,
 		},
 		{
 			hosts[0],
-			NewRequestsStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod-1, 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod*1000)-100, 0),
 			false,
 		},
 		{
 			hosts[1],
-			NewRequestsStatus("test_host", 0, 0, 0, now-hosts[0].SustainedTimePeriod-5, 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[1].SustainedTimePeriod*1000)-50, 0),
 			false,
 		},
 		{
 			hosts[1],
-			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod/7), 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[1].SustainedTimePeriod*1000)/7, 0),
 			true,
 		},
 		{
 			hosts[2],
-			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod/2), 0),
+			NewRequestsStatus("test_host", 0, 0, 0, now-(hosts[0].SustainedTimePeriod*1000)/2, 0),
 			true,
 		},
 	}
 
 	for i := 0; i < len(testCases); i++ {
-		result := testCases[i].status.isInSustainedPeriod(testCases[i].host, now)
+		result := testCases[i].status.isInSustainedPeriod(now, testCases[i].host)
 		if result != testCases[i].expected {
 			t.Errorf("Loop: %v. Expected %v for is in sustained period, got: %v.", i, testCases[i].expected, result)
 		}
@@ -314,17 +328,17 @@ func Test_IsInBurstPeriod(t *testing.T) {
 		expected bool
 	}
 
-	now := time.Now().UTC().Unix()
+	now := GetUnixTimeMilliseconds()
 
 	testCases := []HostStatusTest{
 		{
 			hosts[0],
-			NewRequestsStatus("test_host", 0, 0, 0, 0, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-(hosts[0].BurstTimePeriod*1000)-300),
 			false,
 		},
 		{
 			hosts[0],
-			NewRequestsStatus("test_host", 0, 0, 0, 0, now-hosts[0].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-(hosts[0].BurstTimePeriod*1000)-100),
 			false,
 		},
 		{
@@ -339,23 +353,24 @@ func Test_IsInBurstPeriod(t *testing.T) {
 		},
 		{
 			hosts[1],
-			NewRequestsStatus("test_host", 0, 0, 0, 0, now-3),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-3000),
 			true,
 		},
 		{
 			hosts[1],
-			NewRequestsStatus("test_host", 0, 0, 0, 0, now-hosts[1].BurstTimePeriod-1),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-(hosts[1].BurstTimePeriod*1000)-100),
 			false,
 		},
 		{
 			hosts[2],
-			NewRequestsStatus("test_host", 0, 0, 0, 0, now-1),
+			NewRequestsStatus("test_host", 0, 0, 0, 0, now-1000),
 			true,
 		},
 	}
 
 	for i := 0; i < len(testCases); i++ {
-		result := testCases[i].status.isInBurstPeriod(testCases[i].host, now)
+		result := testCases[i].status.isInBurstPeriod(now, testCases[i].host)
+
 		if result != testCases[i].expected {
 			t.Errorf("Loop: %v. Expected %v for is in burst period, got: %v.", i, testCases[i].expected, result)
 		}
