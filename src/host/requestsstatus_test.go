@@ -234,7 +234,8 @@ func Test_CanMakeRequest(t *testing.T) {
 					t.Errorf("Loop: %v. Expected ability to make request: %v, got: %v", i, testCases[i].expectedCanMakeRequest, canMake)
 				}
 				if diff := deep.Equal(testCases[i].status, testCases[i].expectedStatus); diff != nil {
-
+					//because firstBurstRequest is a millisecond timestamp, it is too small of a unit to predict exactly
+					//this line makes sure that firstBurstRequest is within a range of 20ms
 					if Abs(testCases[i].status.FirstBurstRequest-testCases[i].expectedStatus.FirstBurstRequest) > 10 {
 						t.Errorf("Loop: %v. %v", i, diff)
 					}
