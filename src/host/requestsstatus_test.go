@@ -258,8 +258,8 @@ func Test_RequestFinished(t *testing.T) {
 
 	type TestRequestsStatus struct {
 		requestWeight int
-		status RequestsStatus
-		expected RequestsStatus
+		status        RequestsStatus
+		expected      RequestsStatus
 	}
 
 	testCases := []TestRequestsStatus{
@@ -298,8 +298,8 @@ func Test_RequestFinished(t *testing.T) {
 func Test_RequestCancelled(t *testing.T) {
 	type TestRequestsStatus struct {
 		requestWeight int
-		status RequestsStatus
-		expected RequestsStatus
+		status        RequestsStatus
+		expected      RequestsStatus
 	}
 
 	testCases := []TestRequestsStatus{
