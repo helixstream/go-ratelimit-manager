@@ -162,7 +162,7 @@ func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig)
 	if h.isInSustainedPeriod(now, host) {
 		//reset burst to 0 and sets start of new burst period to now
 		h.SetBurstRequests(0)
-		h.SetFirstBurstRequest(GetUnixTimeMilliseconds())
+		h.SetFirstBurstRequest(now)
 
 		if h.willHitSustainedLimit(requestWeight, host) {
 			return false, h.timeUntilEndOfSustained(now, host)
