@@ -188,12 +188,16 @@ func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig)
 
 }
 
+//RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
+//should be called directly after the request has finished
 func (h *RequestsStatus) RequestFinished(requestWeight int) {
 	h.decrementPendingRequests(requestWeight)
 	h.incrementSustainedRequests(requestWeight)
 	h.incrementBurstRequests(requestWeight)
 }
 
+//RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
+//and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
 func (h *RequestsStatus) RequestCancelled(requestWeight int) {
 	h.decrementPendingRequests(requestWeight)
 }
