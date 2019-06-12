@@ -3,6 +3,7 @@ jobs:
   build:
     docker:
       - image: circleci/golang:1.12
+      - image: redis
     working_directory: /go/src/github.com/helixstream/go-ratelimit-manager
     steps:
       - checkout
