@@ -4,7 +4,6 @@ import (
 	"github.com/go-test/deep"
 	"github.com/gomodule/redigo/redis"
 	"log"
-	"math/rand"
 	"testing"
 	"time"
 )
@@ -70,43 +69,118 @@ func Test_DoesKeyExist(t *testing.T) {
 	}
 }
 
-func Test_SaveGetStatus(t *testing.T) {
+func Test_RequestCancelled(t *testing.T) {
+	c := pool.Get()
+	key := "status:" + "testHost"
 
 	type TestRequestStatus struct {
-		host   string
-		status RequestsStatus
+		requestWeight int
+		status        RequestsStatus
+		expected      RequestsStatus
 	}
-
-	rand.Seed(time.Now().UnixNano())
-
-	min := 1
-	max := 200
 
 	testCases := []TestRequestStatus{
 		{
-			"testHost4",
-			NewRequestsStatus("testHost4", rand.Intn(max-min)+min, rand.Intn(max-min)+min, rand.Intn(max-min)+min, 40, 50),
+			2,
+			NewRequestsStatus("testHost", 0, 0, 10, 0, 0),
+			NewRequestsStatus("testHost", 0, 0, 8, 0, 0),
 		},
 		{
-			"testHost5",
-			NewRequestsStatus("testHost5", rand.Intn(max-min)+min, rand.Intn(max-min)+min, rand.Intn(max-min)+min, 0, 90),
+			1,
+			NewRequestsStatus("testHost", 0, 0, 3, 0, 0),
+			NewRequestsStatus("testHost", 0, 0, 2, 0, 0),
 		},
 		{
-			"testHost6",
-			NewRequestsStatus("testHost6", rand.Intn(max-min)+min, rand.Intn(max-min)+min, rand.Intn(max-min)+min, 450, 0),
+			5,
+			NewRequestsStatus("testHost", 0, 0, 10, 0, 0),
+			NewRequestsStatus("testHost", 0, 0, 5, 0, 0),
 		},
 	}
 
 	for i := 0; i < len(testCases); i++ {
-		testCases[i].status.SaveStatus(pool)
+		s := testCases[i].status
+		_, err := c.Do("HSET", key, host, s.Host, sustainedRequests, s.SustainedRequests, burstRequests, s.BurstRequests, pendingRequests, s.PendingRequests, firstSustainedRequest, s.FirstSustainedRequest, firstBurstRequest, s.FirstBurstRequest)
+		if err != nil {
+			t.Errorf("Loop: %v. %v. ", i, err)
+		}
 
-		newStatus := NewRequestsStatus(testCases[i].host, 0, 0, 0, 0, 0)
+		s.RequestCancelled(testCases[i].requestWeight, pool)
 
-		newStatus.GetStatus(pool)
+		s.getStatus(c, key)
 
-		if diff := deep.Equal(testCases[i].status, newStatus); diff != nil {
-			t.Errorf("Loop: %v. %v", i, diff)
+		if diff := deep.Equal(s, testCases[i].expected); diff != nil {
+			t.Errorf("Loop: %v. %v. ", i, diff)
 		}
 	}
 
+}
+
+func Test_RequestFinished(t *testing.T) {
+	c := pool.Get()
+	key := "status:" + "testHost"
+
+	type TestRequestStatus struct {
+		requestWeight int
+		status        RequestsStatus
+		expected      RequestsStatus
+	}
+
+	testCases := []TestRequestStatus{
+		{
+			2,
+			NewRequestsStatus("testHost", 5, 2, 10, 0, 0),
+			NewRequestsStatus("testHost", 7, 4, 8, 0, 0),
+		},
+		{
+			1,
+			NewRequestsStatus("testHost", 0, 40, 3, 0, 0),
+			NewRequestsStatus("testHost", 1, 41, 2, 0, 0),
+		},
+		{
+			5,
+			NewRequestsStatus("testHost", 35, 0, 10, 0, 0),
+			NewRequestsStatus("testHost", 40, 5, 5, 0, 0),
+		},
+	}
+
+	for i := 0; i < len(testCases); i++ {
+		s := testCases[i].status
+		_, err := c.Do("HSET", key, host, s.Host, sustainedRequests, s.SustainedRequests, burstRequests, s.BurstRequests, pendingRequests, s.PendingRequests, firstSustainedRequest, s.FirstSustainedRequest, firstBurstRequest, s.FirstBurstRequest)
+		if err != nil {
+			t.Errorf("Loop: %v. %v. ", i, err)
+		}
+
+		s.RequestFinished(testCases[i].requestWeight, pool)
+
+		s.getStatus(c, key)
+
+		if diff := deep.Equal(s, testCases[i].expected); diff != nil {
+			t.Errorf("Loop: %v. %v. ", i, diff)
+		}
+	}
+}
+
+func Test_getStatus(t *testing.T) {
+	c := pool.Get()
+	key := "status:" + "testHost"
+
+	testCases := []RequestsStatus{
+		NewRequestsStatus("testHost", 5, 2, 10, 2126523, 2343),
+		NewRequestsStatus("testHost", 0, 40, 3, 236436, 0),
+		NewRequestsStatus("testHost", 35, 0, 10, 0, 9545456),
+	}
+
+	for i := 0; i < len(testCases); i++ {
+		s := testCases[i]
+		_, err := c.Do("HSET", key, host, s.Host, sustainedRequests, s.SustainedRequests, burstRequests, s.BurstRequests, pendingRequests, s.PendingRequests, firstSustainedRequest, s.FirstSustainedRequest, firstBurstRequest, s.FirstBurstRequest)
+		if err != nil {
+			t.Errorf("Loop: %v. %v. ", i, err)
+		}
+		newStatus := NewRequestsStatus("testHost", 0, 0, 0, 0, 0)
+		newStatus.getStatus(c, key)
+
+		if diff := deep.Equal(s, newStatus); diff != nil {
+			t.Errorf("Loop: %v. %v. ", i, diff)
+		}
+	}
 }

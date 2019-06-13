@@ -1,10 +1,10 @@
 package host
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/gomodule/redigo/redis"
 	"github.com/youtube/vitess/go/vt/log"
+	"strconv"
 	"time"
 )
 
@@ -17,6 +17,15 @@ type RequestsStatus struct {
 	FirstSustainedRequest int64 //timestamp in milliseconds that represents when the sustained period began
 	FirstBurstRequest     int64 //timestamp in milliseconds that represents when the burst period began
 }
+
+const (
+	host                  = "host"
+	sustainedRequests     = "sustainedRequests"
+	burstRequests         = "burstRequests"
+	pendingRequests       = "pendingRequests"
+	firstSustainedRequest = "firstSustainedRequest"
+	firstBurstRequest     = "firstBurstRequest"
+)
 
 //key convention redis: struct:host
 //example: status:com.binance.api
@@ -40,64 +49,6 @@ func (h *RequestsStatus) DoesKeyExist(p *redis.Pool) bool {
 	return false
 }
 
-//SaveStatus saves the values of the RequestStatus struct to
-//the redis database
-func (h *RequestsStatus) SaveStatus(p *redis.Pool) {
-	c := p.Get()
-	json, err := h.ConvertToJSON()
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = c.Do("SET", "status:"+h.Host, json)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = c.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-//GetStatus sets the struct's values to the values in the database
-func (h *RequestsStatus) GetStatus(p *redis.Pool) {
-	c := p.Get()
-
-	resp, err := c.Do("GET", "status:"+h.Host)
-	//converts resp to a slice of bytes
-	bytes, err := redis.Bytes(resp, err)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = h.ConvertFromJSON(bytes)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = c.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-//ConvertToJSON converts the contents of the struct to json and
-//returns a slice of bytes to be saved to the database
-func (h *RequestsStatus) ConvertToJSON() ([]byte, error) {
-	return json.Marshal(h)
-}
-
-//ConvertFromJSON takes a slice of bytes and converts it to JSON
-//and then sets the values of the struct based on that json. Used
-//to update struct data from database
-func (h *RequestsStatus) ConvertFromJSON(data []byte) error {
-	if err := json.Unmarshal(data, &h); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 //isConnectedToRedis pings the redis database and returns
 //whether there is a successful connection
 func isConnectedToRedis(p *redis.Pool) bool {
@@ -105,7 +56,7 @@ func isConnectedToRedis(p *redis.Pool) bool {
 	resp, err := c.Do("PING")
 	pingResp, err := redis.String(resp, err)
 	if err != nil {
-		fmt.Errorf("%v", err)
+		log.Fatal(err)
 	}
 
 	if pingResp != "PONG" {
@@ -115,17 +66,119 @@ func isConnectedToRedis(p *redis.Pool) bool {
 	return true
 }
 
+//RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
+//should be called directly after the request has finished
+func (h *RequestsStatus) RequestFinished(requestWeight int, p *redis.Pool) {
+	key := "status:" + h.Host
+	c := p.Get()
+
+	_, err := c.Do("MULTI")
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = c.Do("HINCRBY", key, sustainedRequests, requestWeight)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = c.Do("HINCRBY", key, burstRequests, requestWeight)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = c.Do("HINCRBY", key, pendingRequests, -requestWeight)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = c.Do("EXEC")
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+//RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
+//and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
+func (h *RequestsStatus) RequestCancelled(requestWeight int, p *redis.Pool) {
+	key := "status:" + h.Host
+	c := p.Get()
+	//QUESTION: does this need to be a transaction since I am only updating one value?
+	_, err := c.Do("MULTI")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = c.Do("HINCRBY", key, pendingRequests, -requestWeight)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = c.Do("EXEC")
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (h *RequestsStatus) CanMakeRequestTransaction(p *redis.Pool, requestWeight int, config RateLimitConfig) (bool, int64, error) {
+	c := p.Get()
+	key := "status:" + h.Host
+
+	//if another client modifies the val in the time between our call to WATCH and our call to EXEC the transaction will fail.
+	_, err := c.Do("WATCH", key)
+
+	h.getStatus(c, key)
+
+	canMake, wait := h.CanMakeRequest(requestWeight, config)
+
+	_, err = c.Do("MULTI")
+	if err != nil {
+		fmt.Print(err)
+		return false, 0, err
+	}
+
+	_, err = c.Do("HSET", key, host, h.Host, sustainedRequests, h.SustainedRequests, burstRequests, h.BurstRequests, pendingRequests, h.PendingRequests, firstSustainedRequest, h.SustainedRequests, firstBurstRequest, h.FirstBurstRequest)
+	if err != nil {
+		fmt.Print(err)
+		return false, 0, err
+	}
+
+	_, err = c.Do("EXEC")
+	if err != nil {
+		fmt.Print(err)
+		return false, 0, err
+	}
+
+	return canMake, wait, nil
+}
+
+func (h *RequestsStatus) getStatus(c redis.Conn, key string) {
+	list, err := c.Do("HVALS", key)
+	values, err := redis.Strings(list, err)
+	if err != nil && len(values) != 6 {
+		log.Fatal(err)
+	}
+
+	host := values[0]
+	sus, _ := strconv.Atoi(values[1])
+	burst, _ := strconv.Atoi(values[2])
+	pending, _ := strconv.Atoi(values[3])
+	firstSus, _ := strconv.ParseInt(values[4], 10, 64)
+	firstBurst, _ := strconv.ParseInt(values[5], 10, 64)
+
+	*h = NewRequestsStatus(host, sus, burst, pending, firstSus, firstBurst)
+}
+
 //CheckRequest calls CanMakeRequest until a request can be  made
 //returns true when a request can be made
 //if a request cannot be made it waits the correct amount of time and check again to see if a request can be made
-func (h *RequestsStatus) CheckRequest(requestWeight int, host RateLimitConfig) bool {
-	canMake, wait := h.CanMakeRequest(requestWeight, host)
+func (h *RequestsStatus) CheckRequest(requestWeight int, conifig RateLimitConfig) bool {
+	canMake, wait := h.CanMakeRequest(requestWeight, conifig)
 
 	if wait != 0 {
 		//sleeps out of burst or sustained period where limit has been reached
 		time.Sleep(time.Duration(wait) * time.Millisecond)
 
-		canMake, _ = h.CanMakeRequest(requestWeight, host)
+		canMake, _ = h.CanMakeRequest(requestWeight, conifig)
 		return canMake
 	}
 
@@ -135,20 +188,20 @@ func (h *RequestsStatus) CheckRequest(requestWeight int, host RateLimitConfig) b
 //CanMakeRequest checks to see if a request can be made
 //returns true, 0 if request can be made
 //returns false and the number of milliseconds to wait if a request cannot be made
-func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig) (bool, int64) {
+func (h *RequestsStatus) CanMakeRequest(requestWeight int, config RateLimitConfig) (bool, int64) {
 	now := GetUnixTimeMilliseconds()
 	//if request is in the current burst period
-	if h.isInBurstPeriod(now, host) {
+	if h.isInBurstPeriod(now, config) {
 		//will the request push us over the burst limit
-		if h.willHitBurstLimit(requestWeight, host) {
+		if h.willHitBurstLimit(requestWeight, config) {
 			//is so do not make the request and wait
-			return false, h.timeUntilEndOfBurst(now, host)
+			return false, h.timeUntilEndOfBurst(now, config)
 		}
 
 		//determines if the request will go over the sustained limit
-		if h.willHitSustainedLimit(requestWeight, host) {
+		if h.willHitSustainedLimit(requestWeight, config) {
 			//is so do not make the request and wait
-			return false, h.timeUntilEndOfSustained(now, host)
+			return false, h.timeUntilEndOfSustained(now, config)
 		}
 
 		//did not hit either burst or sustained limit
@@ -159,13 +212,13 @@ func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig)
 		//not in burst period, but in sustained period
 	}
 
-	if h.isInSustainedPeriod(now, host) {
+	if h.isInSustainedPeriod(now, config) {
 		//reset burst to 0 and sets start of new burst period to now
 		h.setBurstRequests(0)
 		h.setFirstBurstRequest(now)
 
-		if h.willHitSustainedLimit(requestWeight, host) {
-			return false, h.timeUntilEndOfSustained(now, host)
+		if h.willHitSustainedLimit(requestWeight, config) {
+			return false, h.timeUntilEndOfSustained(now, config)
 		}
 
 		//can make request because did not hit sustained limit
@@ -186,24 +239,6 @@ func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig)
 
 	return true, 0
 
-}
-
-//RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
-//should be called directly after the request has finished
-func (h *RequestsStatus) RequestFinished(requestWeight int) {
-	if h.getPendingRequests() >= requestWeight {
-		h.decrementPendingRequests(requestWeight)
-		h.incrementSustainedRequests(requestWeight)
-		h.incrementBurstRequests(requestWeight)
-	}
-}
-
-//RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
-//and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
-func (h *RequestsStatus) RequestCancelled(requestWeight int) {
-	if h.getPendingRequests() >= requestWeight {
-		h.decrementPendingRequests(requestWeight)
-	}
 }
 
 //isInSustainedPeriod checks if the current request is in the sustained period
