@@ -1,57 +1,46 @@
 package host
 
 import (
-	"fmt"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 )
 
-type myHandler struct{}
-
 var (
-	sustainedLimit    = 1200
+	serverConfig      = NewRateLimitConfig("transactionTestHost3", 1200, 60, 35, 1)
 	sustainedDuration = time.Minute
-	burstLimit        = 35
 	burstDuration     = time.Second
 
-	sustainedLimiter = NewRateLimiter(sustainedLimit, sustainedDuration)
-	burstLimiter     = NewRateLimiter(burstLimit, burstDuration)
-	bannedLimiter    = NewRateLimiter(10, sustainedDuration)
+	sustainedLimiter = newRateLimiter(serverConfig.SustainedRequestLimit, sustainedDuration)
+	burstLimiter     = newRateLimiter(serverConfig.BurstRequestLimit, burstDuration)
+	bannedLimiter    = newRateLimiter(10, sustainedDuration)
 
 	port = "8000"
 )
 
-func (h myHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func serveHTTP(w http.ResponseWriter, r *http.Request) {
+	//simulates random server errors
 	if rand.Intn(200) == 5 {
 		http.Error(w, "Internal Service Error", 500)
 		return
 	}
 
-	if sustainedLimiter.Allow() && burstLimiter.Allow() {
-
-
-		message := "Burst left: " + strconv.Itoa(burstLimiter.CurCount) + ". Sustained left: " + strconv.Itoa(sustainedLimiter.CurCount) + ". "
-		_, err := w.Write([]byte(message))
-		if err != nil {
-			fmt.Print(err)
-		}
-	} else if bannedLimiter.Allow() {
-		//w.WriteHeader(429)
+	if sustainedLimiter.allow() && burstLimiter.allow() {
+		w.WriteHeader(200)
+	} else if bannedLimiter.allow() {
 		http.Error(w, "Too many requests", 429)
 	} else {
 		http.Error(w, "Banned for too many requests", 419)
 	}
 }
 
-func main() {
+func server() {
 	rand.Seed(time.Now().UTC().Unix())
 
-	http.HandleFunc("/testRateLimit", myHandler{}.ServeHTTP)
+	http.HandleFunc("/testRateLimit", serveHTTP)
 
-	if err := http.ListenAndServe(":" + port, nil); err != nil {
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		panic(err)
 	}
 }
@@ -61,12 +50,12 @@ func main() {
 //modified so that I could access CurCount
 
 //rate limit code
-type RateLimiter struct {
-	MaxCount int
+type rateLimiter struct {
+	maxCount int
 	interval time.Duration
 
 	mu       sync.Mutex
-	CurCount int
+	curCount int
 	lastTime time.Time
 }
 
@@ -75,26 +64,26 @@ type RateLimiter struct {
 // equal to maxCount/interval. For example, if you want to a max QPS of 5000,
 // and want to limit bursts to no more than 500, you'd specify a maxCount of 500
 // and an interval of 100*time.Millilsecond.
-func NewRateLimiter(maxCount int, interval time.Duration) *RateLimiter {
-	return &RateLimiter{
-		MaxCount: maxCount,
+func newRateLimiter(maxCount int, interval time.Duration) *rateLimiter {
+	return &rateLimiter{
+		maxCount: maxCount,
 		interval: interval,
 	}
 }
 
 // Allow returns true if a request is within the rate limit norms.
 // Otherwise, it returns false.
-func (rl *RateLimiter) Allow() bool {
+func (rl *rateLimiter) allow() bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	if time.Since(rl.lastTime) < rl.interval {
-		if rl.CurCount > 0 {
-			rl.CurCount--
+		if rl.curCount > 0 {
+			rl.curCount--
 			return true
 		}
 		return false
 	}
-	rl.CurCount = rl.MaxCount - 1
+	rl.curCount = rl.maxCount - 1
 	rl.lastTime = time.Now()
 	return true
 }

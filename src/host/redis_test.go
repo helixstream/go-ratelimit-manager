@@ -25,17 +25,17 @@ var pool = &redis.Pool{
 }
 
 func Test_CanMakeTestTransaction(t *testing.T) {
-	hostConfig := NewRateLimitConfig("transactionTestHost3", 1200, 60, 35, 1)
 	rand.Seed(time.Now().Unix())
-
 	channel := make(chan string)
 
 	numOfRoutines := 50
 
-	for i := 0; i < numOfRoutines; i++ {
-		go makeRequests(t, hostConfig, i, channel)
-	}
+	go server()
 
+	for i := 0; i < numOfRoutines; i++ {
+		//ServerConfig is a global variable declared in server.go
+		go makeRequests(t, serverConfig, i, channel)
+	}
 	for i := 0; i < numOfRoutines; i++ {
 		<-channel
 	}
