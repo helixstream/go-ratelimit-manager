@@ -1,6 +1,6 @@
 package host
 
-import (
+/*import (
 	"github.com/go-test/deep"
 	"testing"
 )
@@ -495,3 +495,6 @@ func Test_WillHitBurstLimit(t *testing.T) {
 		}
 	}
 }
+
+
+ */

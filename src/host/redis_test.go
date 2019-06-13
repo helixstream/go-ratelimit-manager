@@ -1,17 +1,17 @@
 package host
 
 import (
-	"github.com/go-test/deep"
+	"fmt"
 	"github.com/gomodule/redigo/redis"
-	"log"
+	"net/http"
 	"testing"
 	"time"
 )
 
 //pool of connections to redis database
 var pool = &redis.Pool{
-	MaxIdle:   80,
-	MaxActive: 12000,
+	MaxIdle:   800,
+	MaxActive: 120000,
 	Dial: func() (redis.Conn, error) {
 		c, err := redis.Dial("tcp", ":6379")
 		if err != nil {
@@ -19,10 +19,76 @@ var pool = &redis.Pool{
 		}
 		return c, err
 	},
-	IdleTimeout: 240 * time.Second,
+	IdleTimeout: 2400 * time.Second,
 }
 
-func Test_PING(t *testing.T) {
+func Test_CanMakeTestTransaction(t *testing.T) {
+	hostConfig := NewRateLimitConfig("transactionTestHost", 1200, 60, 25, 1)
+
+	c := pool.Get()
+	defer c.Close()
+
+	key := "status:" + hostConfig.Host
+
+	s := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
+	_, err := c.Do("HSET", key, host, s.Host, sustainedRequests, s.SustainedRequests, burstRequests, s.BurstRequests, pendingRequests, s.PendingRequests, firstSustainedRequest, s.FirstSustainedRequest, firstBurstRequest, s.FirstBurstRequest)
+	if err != nil {
+		t.Error(err)
+	}
+
+	for i := 0; i < 50; i++ {
+		go makeRequest(t, hostConfig, i)
+	}
+
+	select {}
+}
+
+func makeRequest(t *testing.T, hostConfig RateLimitConfig, loop int) {
+	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0,0, 0)
+
+	for {
+		//fmt.Print(requestStatus)
+		canMake, sleepTime, err := requestStatus.CanMakeRequestTransaction(pool, 1, hostConfig)
+		//was not able to get struct info from database
+		if err != nil {
+			fmt.Print("TRANSACTION DISCARDED")
+			return
+		}
+
+		if canMake {
+			statusCode := getStatusCode("http://127.0.0.1:8000/testRateLimit", t)
+			if statusCode == 500 {
+				requestStatus.RequestCancelled(1, pool)
+			} else {
+				requestStatus.RequestFinished(1, pool)
+			}
+			fmt.Printf(" %v:%v \n", loop, statusCode)
+		} else {
+			//fmt.Printf("sleep for: %v. ", sleepTime)
+			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+		}
+
+	}
+}
+
+func getStatusCode(url string, t *testing.T) int {
+
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp != nil {
+		return resp.StatusCode
+	}
+
+	return 0
+}
+
+
+/*func Test_PING(t *testing.T) {
 	resp := isConnectedToRedis(pool)
 
 	if resp != true {
@@ -184,3 +250,5 @@ func Test_getStatus(t *testing.T) {
 		}
 	}
 }
+
+ */

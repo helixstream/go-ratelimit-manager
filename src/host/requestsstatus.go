@@ -69,8 +69,10 @@ func isConnectedToRedis(p *redis.Pool) bool {
 //RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
 //should be called directly after the request has finished
 func (h *RequestsStatus) RequestFinished(requestWeight int, p *redis.Pool) {
+	//fmt.Print("request finished ")
 	key := "status:" + h.Host
 	c := p.Get()
+	defer c.Close()
 
 	_, err := c.Do("MULTI")
 	if err != nil {
@@ -102,6 +104,8 @@ func (h *RequestsStatus) RequestFinished(requestWeight int, p *redis.Pool) {
 func (h *RequestsStatus) RequestCancelled(requestWeight int, p *redis.Pool) {
 	key := "status:" + h.Host
 	c := p.Get()
+	defer c.Close()
+
 	//QUESTION: does this need to be a transaction since I am only updating one value?
 	_, err := c.Do("MULTI")
 	if err != nil {
@@ -119,43 +123,53 @@ func (h *RequestsStatus) RequestCancelled(requestWeight int, p *redis.Pool) {
 	}
 }
 
+//didn't really know what to name this function
 func (h *RequestsStatus) CanMakeRequestTransaction(p *redis.Pool, requestWeight int, config RateLimitConfig) (bool, int64, error) {
 	c := p.Get()
+	defer c.Close()
 	key := "status:" + h.Host
 
 	//if another client modifies the val in the time between our call to WATCH and our call to EXEC the transaction will fail.
 	_, err := c.Do("WATCH", key)
 
-	h.getStatus(c, key)
+	h.getStatus(p, key)
 
 	canMake, wait := h.CanMakeRequest(requestWeight, config)
+
 
 	_, err = c.Do("MULTI")
 	if err != nil {
 		fmt.Print(err)
+
 		return false, 0, err
 	}
 
-	_, err = c.Do("HSET", key, host, h.Host, sustainedRequests, h.SustainedRequests, burstRequests, h.BurstRequests, pendingRequests, h.PendingRequests, firstSustainedRequest, h.SustainedRequests, firstBurstRequest, h.FirstBurstRequest)
+	_, err = c.Do("HSET", key, host, h.Host, sustainedRequests, h.SustainedRequests, burstRequests, h.BurstRequests, pendingRequests, h.PendingRequests, firstSustainedRequest, h.FirstSustainedRequest, firstBurstRequest, h.FirstBurstRequest)
 	if err != nil {
 		fmt.Print(err)
+
 		return false, 0, err
 	}
 
-	_, err = c.Do("EXEC")
-	if err != nil {
-		fmt.Print(err)
+	resp, err := c.Do("EXEC")
+	//fmt.Printf("EXEC resp: %v, %v. ", resp, err)
+	if resp == nil || err != nil {
+		//fmt.Print(err)
+
 		return false, 0, err
 	}
 
 	return canMake, wait, nil
 }
 
-func (h *RequestsStatus) getStatus(c redis.Conn, key string) {
+func (h *RequestsStatus) getStatus(p *redis.Pool, key string) {
+	c := p.Get()
+	defer c.Close()
 	list, err := c.Do("HVALS", key)
 	values, err := redis.Strings(list, err)
-	if err != nil && len(values) != 6 {
-		log.Fatal(err)
+	if err != nil || len(values) != 6 {
+		*h = NewRequestsStatus(h.Host, 0, 0, 0, 0, 0)
+		return
 	}
 
 	host := values[0]
