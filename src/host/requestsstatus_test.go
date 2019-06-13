@@ -1,111 +1,9 @@
 package host
 
-/*import (
+import (
 	"github.com/go-test/deep"
 	"testing"
 )
-
-func Test_CheckRequest(t *testing.T) {
-	hosts := []RateLimitConfig{
-		NewRateLimitConfig("test_host_1", 1200, 60, 20, 1),
-		NewRateLimitConfig("test_host_2", 600, 60, 20, 1),
-	}
-
-	type HostStatusTest struct {
-		name          string
-		host          RateLimitConfig
-		requestWeight int
-		status        RequestsStatus
-	}
-
-	now := GetUnixTimeMilliseconds()
-
-	testCases := []HostStatusTest{
-		{
-			"not in sustained, not in burst",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 500, 500, 0, now-(hosts[0].SustainedTimePeriod*1000)-5, now-(hosts[0].BurstTimePeriod*1000)-1),
-		},
-		{
-			"not in sustained, not in burst",
-			hosts[1],
-			5,
-			NewRequestsStatus("test_host", 500, 500, 0, now-(hosts[0].SustainedTimePeriod*1000)-5, now-(hosts[0].BurstTimePeriod*1000)-1),
-		},
-		{
-			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 500, 500, 20, now, now-(hosts[0].BurstTimePeriod*1000)),
-		},
-		{
-			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
-			hosts[1],
-			3,
-			NewRequestsStatus("test_host", 500, 10, 20, now-3000, now-(hosts[0].BurstTimePeriod*1000)),
-		},
-		{
-			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod*1000)+2000, now-(hosts[0].BurstTimePeriod*1000)-1000),
-		},
-		{
-			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
-			hosts[1],
-			5,
-			NewRequestsStatus("test_host", 597, 5, 5, now-(hosts[0].SustainedTimePeriod*1000)+7000, now-(hosts[0].BurstTimePeriod*1000)-100),
-		},
-		{
-			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
-		},
-		{
-			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
-			hosts[1],
-			5,
-			NewRequestsStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
-		},
-		{
-			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
-		},
-		{
-			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
-			hosts[1],
-			1,
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod*1000)+1000, now),
-		},
-		{
-			"is in sustained, is in burst, will not hit either limit",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1000, 10, 4, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
-		},
-		{
-			"is in sustained, is in burst, will not hit either limit",
-			hosts[1],
-			3,
-			NewRequestsStatus("test_host", 400, 10, 4, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
-		},
-	}
-
-	for i := 0; i < len(testCases); i++ {
-		t.Run(testCases[i].name, func(t *testing.T) {
-			canMake := testCases[i].status.CheckRequest(testCases[i].requestWeight, testCases[i].host)
-
-			if !canMake {
-				t.Errorf("Loop: %v. Expected true for CheckRequest, got: %v. Subname: %v", i, canMake, testCases[i].name)
-			}
-		})
-
-	}
-}
 
 func Test_CanMakeRequest(t *testing.T) {
 	hosts := []RateLimitConfig{
@@ -495,6 +393,3 @@ func Test_WillHitBurstLimit(t *testing.T) {
 		}
 	}
 }
-
-
- */

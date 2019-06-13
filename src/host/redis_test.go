@@ -2,7 +2,9 @@ package host
 
 import (
 	"fmt"
+	"github.com/go-test/deep"
 	"github.com/gomodule/redigo/redis"
+	"math/rand"
 	"net/http"
 	"testing"
 	"time"
@@ -23,52 +25,54 @@ var pool = &redis.Pool{
 }
 
 func Test_CanMakeTestTransaction(t *testing.T) {
-	hostConfig := NewRateLimitConfig("transactionTestHost", 1200, 60, 25, 1)
+	hostConfig := NewRateLimitConfig("transactionTestHost3", 1200, 60, 35, 1)
+	rand.Seed(time.Now().Unix())
 
-	c := pool.Get()
-	defer c.Close()
+	channel := make(chan string)
 
-	key := "status:" + hostConfig.Host
+	numOfRoutines := 50
 
-	s := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
-	_, err := c.Do("HSET", key, host, s.Host, sustainedRequests, s.SustainedRequests, burstRequests, s.BurstRequests, pendingRequests, s.PendingRequests, firstSustainedRequest, s.FirstSustainedRequest, firstBurstRequest, s.FirstBurstRequest)
-	if err != nil {
-		t.Error(err)
+	for i := 0; i < numOfRoutines; i++ {
+		go makeRequests(t, hostConfig, i, channel)
 	}
 
-	for i := 0; i < 50; i++ {
-		go makeRequest(t, hostConfig, i)
+	for i := 0; i < numOfRoutines; i++ {
+		<-channel
 	}
-
-	select {}
 }
 
-func makeRequest(t *testing.T, hostConfig RateLimitConfig, loop int) {
-	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0,0, 0)
+func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
+	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	for {
-		//fmt.Print(requestStatus)
-		canMake, sleepTime, err := requestStatus.CanMakeRequestTransaction(pool, 1, hostConfig)
-		//was not able to get struct info from database
-		if err != nil {
-			fmt.Print("TRANSACTION DISCARDED")
-			return
-		}
+	numOfRequests := rand.Intn(10) + 5
+
+	for numOfRequests > 0 {
+		requestWeight := rand.Intn(5) + 1
+
+		canMake, sleepTime := requestStatus.CanMakeRequestTransaction(pool, requestWeight, hostConfig)
 
 		if canMake {
 			statusCode := getStatusCode("http://127.0.0.1:8000/testRateLimit", t)
+			fmt.Printf("%v:%v \n", id, statusCode)
+
 			if statusCode == 500 {
-				requestStatus.RequestCancelled(1, pool)
+				requestStatus.RequestCancelled(requestWeight, pool)
+
+			} else if statusCode == 200 {
+				requestStatus.RequestFinished(requestWeight, pool)
+				numOfRequests--
+
 			} else {
-				requestStatus.RequestFinished(1, pool)
+				t.Errorf("Routine: %v. %v", id, statusCode)
 			}
-			fmt.Printf(" %v:%v \n", loop, statusCode)
+
 		} else {
-			//fmt.Printf("sleep for: %v. ", sleepTime)
 			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
-
 	}
+
+	fmt.Printf("GO ROUTINE: %v FINISHED \n", id)
+	c <- "done"
 }
 
 func getStatusCode(url string, t *testing.T) int {
@@ -87,8 +91,7 @@ func getStatusCode(url string, t *testing.T) int {
 	return 0
 }
 
-
-/*func Test_PING(t *testing.T) {
+func Test_PING(t *testing.T) {
 	resp := isConnectedToRedis(pool)
 
 	if resp != true {
@@ -118,12 +121,12 @@ func Test_DoesKeyExist(t *testing.T) {
 
 	_, err := c.Do("SET", "status:testHost2", "value")
 	if err != nil {
-		log.Fatal(err)
+		t.Error(err)
 	}
 
 	err = c.Close()
 	if err != nil {
-		log.Fatal(err)
+		t.Error(err)
 	}
 
 	for i := 0; i < len(testCases); i++ {
@@ -172,7 +175,7 @@ func Test_RequestCancelled(t *testing.T) {
 
 		s.RequestCancelled(testCases[i].requestWeight, pool)
 
-		s.getStatus(c, key)
+		s.getStatus(pool, key)
 
 		if diff := deep.Equal(s, testCases[i].expected); diff != nil {
 			t.Errorf("Loop: %v. %v. ", i, diff)
@@ -218,7 +221,7 @@ func Test_RequestFinished(t *testing.T) {
 
 		s.RequestFinished(testCases[i].requestWeight, pool)
 
-		s.getStatus(c, key)
+		s.getStatus(pool, key)
 
 		if diff := deep.Equal(s, testCases[i].expected); diff != nil {
 			t.Errorf("Loop: %v. %v. ", i, diff)
@@ -243,12 +246,10 @@ func Test_getStatus(t *testing.T) {
 			t.Errorf("Loop: %v. %v. ", i, err)
 		}
 		newStatus := NewRequestsStatus("testHost", 0, 0, 0, 0, 0)
-		newStatus.getStatus(c, key)
+		newStatus.getStatus(pool, key)
 
 		if diff := deep.Equal(s, newStatus); diff != nil {
 			t.Errorf("Loop: %v. %v. ", i, diff)
 		}
 	}
 }
-
- */

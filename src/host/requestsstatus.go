@@ -50,7 +50,7 @@ func (h *RequestsStatus) DoesKeyExist(p *redis.Pool) bool {
 }
 
 //isConnectedToRedis pings the redis database and returns
-//whether there is a successful connection
+//whether the ping was successful
 func isConnectedToRedis(p *redis.Pool) bool {
 	c := p.Get()
 	resp, err := c.Do("PING")
@@ -123,8 +123,10 @@ func (h *RequestsStatus) RequestCancelled(requestWeight int, p *redis.Pool) {
 	}
 }
 
-//didn't really know what to name this function
-func (h *RequestsStatus) CanMakeRequestTransaction(p *redis.Pool, requestWeight int, config RateLimitConfig) (bool, int64, error) {
+//CanMakeRequestTransaction communicates with the database to figure out when it is possible to make a request
+//returns true, 0 if a request can be made, and false and the amount of time to sleep when a request cannot be made
+//DIDN'T REALLY KNOW WHAT TO NAME THIS FUNCTION
+func (h *RequestsStatus) CanMakeRequestTransaction(p *redis.Pool, requestWeight int, config RateLimitConfig) (bool, int64) {
 	c := p.Get()
 	defer c.Close()
 	key := "status:" + h.Host
@@ -136,19 +138,18 @@ func (h *RequestsStatus) CanMakeRequestTransaction(p *redis.Pool, requestWeight 
 
 	canMake, wait := h.CanMakeRequest(requestWeight, config)
 
-
 	_, err = c.Do("MULTI")
 	if err != nil {
 		fmt.Print(err)
 
-		return false, 0, err
+		return false, 0
 	}
 
 	_, err = c.Do("HSET", key, host, h.Host, sustainedRequests, h.SustainedRequests, burstRequests, h.BurstRequests, pendingRequests, h.PendingRequests, firstSustainedRequest, h.FirstSustainedRequest, firstBurstRequest, h.FirstBurstRequest)
 	if err != nil {
 		fmt.Print(err)
 
-		return false, 0, err
+		return false, 0
 	}
 
 	resp, err := c.Do("EXEC")
@@ -156,12 +157,13 @@ func (h *RequestsStatus) CanMakeRequestTransaction(p *redis.Pool, requestWeight 
 	if resp == nil || err != nil {
 		//fmt.Print(err)
 
-		return false, 0, err
+		return false, 0
 	}
 
-	return canMake, wait, nil
+	return canMake, wait
 }
 
+//getStatus gets the current request status information from the database and updates the struct
 func (h *RequestsStatus) getStatus(p *redis.Pool, key string) {
 	c := p.Get()
 	defer c.Close()
@@ -180,23 +182,6 @@ func (h *RequestsStatus) getStatus(p *redis.Pool, key string) {
 	firstBurst, _ := strconv.ParseInt(values[5], 10, 64)
 
 	*h = NewRequestsStatus(host, sus, burst, pending, firstSus, firstBurst)
-}
-
-//CheckRequest calls CanMakeRequest until a request can be  made
-//returns true when a request can be made
-//if a request cannot be made it waits the correct amount of time and check again to see if a request can be made
-func (h *RequestsStatus) CheckRequest(requestWeight int, conifig RateLimitConfig) bool {
-	canMake, wait := h.CanMakeRequest(requestWeight, conifig)
-
-	if wait != 0 {
-		//sleeps out of burst or sustained period where limit has been reached
-		time.Sleep(time.Duration(wait) * time.Millisecond)
-
-		canMake, _ = h.CanMakeRequest(requestWeight, conifig)
-		return canMake
-	}
-
-	return true
 }
 
 //CanMakeRequest checks to see if a request can be made
@@ -303,6 +288,7 @@ func (h *RequestsStatus) timeUntilEndOfBurst(currentTime int64, host RateLimitCo
 	return endOfPeriod - currentTime
 }
 
+//GetUnixTimeMilliseconds returns the current UTC time in milliseconds
 func GetUnixTimeMilliseconds() int64 {
 	return time.Now().UTC().UnixNano() / int64(time.Millisecond)
 }
