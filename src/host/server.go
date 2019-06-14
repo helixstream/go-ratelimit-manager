@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	serverConfig      = NewRateLimitConfig("transactionTestHost3", 1200, 60, 35, 1)
+	serverConfig      = NewRateLimitConfig("transactionTestHost3", 5000, 60, 85, 1)
 	sustainedDuration = time.Minute
 	burstDuration     = time.Second
 

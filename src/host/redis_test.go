@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-test/deep"
-	"github.com/gomodule/redigo/redis"
+	"github.com/mediocregopher/radix"
 	"math/rand"
 	"net/http"
 	"testing"
@@ -12,25 +12,18 @@ import (
 )
 
 //pool of connections to redis database
-var pool = &redis.Pool{
-	MaxIdle:   700,
-	MaxActive: 3000,
-	Dial: func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", ":6379")
-		if err != nil {
-			panic(err.Error())
-		}
-		return c, err
-
-	},
-	IdleTimeout: 240 * time.Second,
-}
+var pool, err = radix.NewPool("tcp", "127.0.0.1:6379", 500)
 
 func Test_CanMakeTestTransaction(t *testing.T) {
+	//handles creating new pool error
+	if err != nil {
+		panic(err)
+	}
+
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 100
+	numOfRoutines := 3000
 
 	server := server()
 
@@ -55,7 +48,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := rand.Intn(10) + 1
+	numOfRequests := rand.Intn(4) + 1
 	//sleep to make sure that we do not flood redis with requests at the start of the program
 	time.Sleep(time.Duration(rand.Intn(200)) * time.Millisecond)
 
@@ -71,10 +64,14 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 			}
 
 			if statusCode == 500 {
-				requestStatus.RequestCancelled(requestWeight, pool)
+				if err := requestStatus.RequestCancelled(requestWeight, pool); err != nil {
+					t.Error(err)
+				}
 
 			} else if statusCode == 200 {
-				requestStatus.RequestFinished(requestWeight, pool)
+				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
+					t.Error(err)
+				}
 				numOfRequests--
 
 			} else {
@@ -109,42 +106,6 @@ func Test_PING(t *testing.T) {
 	}
 }
 
-func Test_DoesKeyExist(t *testing.T) {
-
-	type TestRequestStatus struct {
-		status   RequestsStatus
-		expected bool
-	}
-
-	testCases := []TestRequestStatus{
-		{
-			NewRequestsStatus("testHost1", 0, 0, 0, 0, 0),
-			false,
-		},
-		{
-			NewRequestsStatus("testHost2", 0, 0, 0, 0, 0),
-			true,
-		},
-	}
-
-	c := pool.Get()
-
-	_, err := c.Do("SET", "status:testHost2", "value")
-	if err != nil {
-		t.Error(err)
-	}
-
-	closeConnection(c)
-
-	for i := 0; i < len(testCases); i++ {
-		result := testCases[i].status.DoesKeyExist(pool)
-
-		if result != testCases[i].expected {
-			t.Errorf("Loop: %v. Expected key to exist: %v, got: %v. ", i, testCases[i].expected, result)
-		}
-	}
-}
-
 func Test_RequestCancelled(t *testing.T) {
 
 	key := "status:" + "testHost"
@@ -176,25 +137,32 @@ func Test_RequestCancelled(t *testing.T) {
 	for i := 0; i < len(testCases); i++ {
 		s := testCases[i].status
 
-		c := pool.Get()
-		_, err := c.Do("HSET",
-			key,
-			host, s.Host,
-			sustainedRequests, s.SustainedRequests,
-			burstRequests, s.BurstRequests,
-			pendingRequests, s.PendingRequests,
-			firstSustainedRequest, s.FirstSustainedRequest,
-			firstBurstRequest, s.FirstBurstRequest,
-		)
-		if err != nil {
-			t.Errorf("Loop: %v. %v. ", i, err)
-		}
+		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
+			err = pool.Do(radix.FlatCmd(nil,"HSET",
+				key,
+				host, s.Host,
+				sustainedRequests, s.SustainedRequests,
+				burstRequests, s.BurstRequests,
+				pendingRequests, s.PendingRequests,
+				firstSustainedRequest, s.FirstSustainedRequest,
+				firstBurstRequest, s.FirstBurstRequest,
+			))
+			if err != nil {
+				return err
+			}
 
-		closeConnection(c)
+			if err := s.RequestCancelled(testCases[i].requestWeight, pool); err != nil {
+				t.Error(err)
+			}
 
-		s.RequestCancelled(testCases[i].requestWeight, pool)
+			err = s.updateStatusFromDatabase(c, key)
+			if err != nil {
+				return err
+			}
 
-		err = s.updateStatusFromDatabase(pool, key)
+			return nil
+		}))
+
 		if err != nil {
 			t.Error(err)
 		}
@@ -236,25 +204,32 @@ func Test_RequestFinished(t *testing.T) {
 	for i := 0; i < len(testCases); i++ {
 		s := testCases[i].status
 
-		c := pool.Get()
-		_, err := c.Do("HSET",
-			key,
-			host, s.Host,
-			sustainedRequests, s.SustainedRequests,
-			burstRequests, s.BurstRequests,
-			pendingRequests, s.PendingRequests,
-			firstSustainedRequest, s.FirstSustainedRequest,
-			firstBurstRequest, s.FirstBurstRequest,
-		)
-		if err != nil {
-			t.Errorf("Loop: %v. %v. ", i, err)
-		}
+		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
+			err = pool.Do(radix.FlatCmd(nil,"HSET",
+				key,
+				host, s.Host,
+				sustainedRequests, s.SustainedRequests,
+				burstRequests, s.BurstRequests,
+				pendingRequests, s.PendingRequests,
+				firstSustainedRequest, s.FirstSustainedRequest,
+				firstBurstRequest, s.FirstBurstRequest,
+			))
+			if err != nil {
+				return err
+			}
 
-		closeConnection(c)
+			if err := s.RequestFinished(testCases[i].requestWeight, pool); err != nil {
+				t.Error(err)
+			}
 
-		s.RequestFinished(testCases[i].requestWeight, pool)
+			err = s.updateStatusFromDatabase(c, key)
+			if err != nil {
+				return err
+			}
 
-		err = s.updateStatusFromDatabase(pool, key)
+			return nil
+		}))
+
 		if err != nil {
 			t.Error(err)
 		}
@@ -276,25 +251,30 @@ func Test_updateStatusFromDatabase(t *testing.T) {
 	}
 
 	for i := 0; i < len(testCases); i++ {
-		c := pool.Get()
 		s := testCases[i]
-		_, err := c.Do("HSET",
-			key,
-			host, s.Host,
-			sustainedRequests, s.SustainedRequests,
-			burstRequests, s.BurstRequests,
-			pendingRequests, s.PendingRequests,
-			firstSustainedRequest, s.FirstSustainedRequest,
-			firstBurstRequest, s.FirstBurstRequest,
-		)
-		if err != nil {
-			t.Errorf("Loop: %v. %v. ", i, err)
-		}
-
-		closeConnection(c)
-
 		newStatus := NewRequestsStatus("testHost", 0, 0, 0, 0, 0)
-		err = newStatus.updateStatusFromDatabase(pool, key)
+
+		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
+			err = c.Do(radix.FlatCmd(nil,"HSET",
+				key,
+				host, s.Host,
+				sustainedRequests, s.SustainedRequests,
+				burstRequests, s.BurstRequests,
+				pendingRequests, s.PendingRequests,
+				firstSustainedRequest, s.FirstSustainedRequest,
+				firstBurstRequest, s.FirstBurstRequest,
+			))
+			if err != nil {
+				return err
+			}
+
+			err = newStatus.updateStatusFromDatabase(c, key)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}))
 		if err != nil {
 			t.Error(err)
 		}
@@ -304,3 +284,4 @@ func Test_updateStatusFromDatabase(t *testing.T) {
 		}
 	}
 }
+

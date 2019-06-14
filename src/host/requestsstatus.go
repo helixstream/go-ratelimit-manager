@@ -2,8 +2,7 @@ package host
 
 import (
 	"fmt"
-	"github.com/gomodule/redigo/redis"
-	"github.com/youtube/vitess/go/vt/log"
+	"github.com/mediocregopher/radix"
 	"strconv"
 	"time"
 )
@@ -31,180 +30,188 @@ const (
 //example: status:com.binance.api
 //example: config:com.binance.api
 
-//DoesKeyExist checks the database to see if a non nil value is
-//stored at the specific RequestStatus key
-func (h *RequestsStatus) DoesKeyExist(p *redis.Pool) bool {
-	c := p.Get()
-
-	resp, err := c.Do("GET", "status:"+h.Host)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	closeConnection(c)
-
-	//converts resp to a string
-	stringResp, err := redis.String(resp, err)
-	if stringResp != "" {
-		return true
-	}
-
-	return false
-}
-
 //isConnectedToRedis pings the redis database and returns
 //whether the ping was successful
-func isConnectedToRedis(p *redis.Pool) bool {
-	c := p.Get()
-	resp, err := c.Do("PING")
-	pingResp, err := redis.String(resp, err)
+func isConnectedToRedis(p *radix.Pool) bool {
+	var resp string
+	err := p.Do(radix.Cmd(&resp, "PING"))
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	closeConnection(c)
-
-	if pingResp != "PONG" {
 		return false
 	}
-
 	return true
 }
 
+//THIS SHOULD RETURN AN ERROR
 //RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
 //should be called directly after the request has finished
-func (h *RequestsStatus) RequestFinished(requestWeight int, p *redis.Pool) {
-
+func (h *RequestsStatus) RequestFinished(requestWeight int, p *radix.Pool) error {
 	key := "status:" + h.Host
-	c := p.Get()
+	//this is radix's way of doing a transaction
+	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
+		//start of transaction
+		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
+			return err
+		}
+		// If any of the calls after the MULTI call error it's important that
+		// the transaction is discarded. This isn't strictly necessary if the
+		// error was a network error, as the connection would be closed by the
+		// client anyway, but it's important otherwise.
+		var err error
+		defer func() {
+			if err != nil {
+				// The return from DISCARD doesn't matter. If it's an error then
+				// it's a network error and the Conn will be closed by the
+				// client.
+				c.Do(radix.Cmd(nil, "DISCARD"))
+			}
+		}()
 
-	_, err := c.Do("MULTI")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = c.Do("HINCRBY", key, sustainedRequests, requestWeight)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = c.Do("HINCRBY", key, burstRequests, requestWeight)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = c.Do("HINCRBY", key, pendingRequests, -requestWeight)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = c.Do("EXEC")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	closeConnection(c)
-}
-
-//RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
-//and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
-func (h *RequestsStatus) RequestCancelled(requestWeight int, p *redis.Pool) {
-	key := "status:" + h.Host
-	c := p.Get()
-
-	_, err := c.Do("MULTI")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = c.Do("HINCRBY", key, pendingRequests, -requestWeight)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = c.Do("EXEC")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	closeConnection(c)
-}
-
-//CanMakeRequestTransaction communicates with the database to figure out when it is possible to make a request
-//returns true, 0 if a request can be made, and false and the amount of time to sleep when a request cannot be made
-//DIDN'T REALLY KNOW WHAT TO NAME THIS FUNCTION
-func (h *RequestsStatus) CanMakeRequest(p *redis.Pool, requestWeight int, config RateLimitConfig) (bool, int64) {
-	c := p.Get()
-
-	key := "status:" + h.Host
-
-	//if another client modifies the val in the time between our call to WATCH and our call to EXEC the transaction will fail.
-	_, err := c.Do("WATCH", key)
-	if err != nil {
-		fmt.Print(err)
-		closeConnection(c)
-		return false, 0
-	}
-
-	err = h.updateStatusFromDatabase(p, key)
-	if err != nil {
-		return false, 0
-	}
-
-	canMake, wait := h.canMakeRequestLogic(requestWeight, config)
-
-	_, err = c.Do("MULTI")
-	if err != nil {
-		fmt.Print(err)
-
-		closeConnection(c)
-		return false, 0
-	}
-
-	_, err = c.Do("HSET",
-		key,
-		host, h.Host,
-		sustainedRequests, h.SustainedRequests,
-		burstRequests, h.BurstRequests,
-		pendingRequests, h.PendingRequests,
-		firstSustainedRequest, h.FirstSustainedRequest,
-		firstBurstRequest, h.FirstBurstRequest,
-	)
-	if err != nil {
-		fmt.Print(err)
-
-		closeConnection(c)
-		return false, 0
-	}
-
-	resp, err := c.Do("EXEC")
-	if resp == nil || err != nil {
-		if err != nil {
-			fmt.Print(err)
+		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, sustainedRequests, requestWeight)); err != nil {
+			return err
 		}
 
-		closeConnection(c)
+		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, burstRequests, requestWeight)); err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, pendingRequests, -requestWeight)); err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.Cmd(nil, "EXEC")); err != nil {
+			return err
+		}
+
+		return nil
+	}))
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+//THIS SHOULD RETURN AN ERROR
+//RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
+//and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
+func (h *RequestsStatus) RequestCancelled(requestWeight int, p *radix.Pool) error {
+	key := "status:" + h.Host
+	//this is radix's way of doing a transaction
+	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
+
+		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
+			return err
+		}
+		// If any of the calls after the MULTI call error it's important that
+		// the transaction is discarded. This isn't strictly necessary if the
+		// error was a network error, as the connection would be closed by the
+		// client anyway, but it's important otherwise.
+		var err error
+		defer func() {
+			if err != nil {
+				// The return from DISCARD doesn't matter. If it's an error then
+				// it's a network error and the Conn will be closed by the
+				// client.
+				c.Do(radix.Cmd(nil, "DISCARD"))
+			}
+		}()
+
+		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, pendingRequests, -requestWeight)); err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.Cmd(nil, "EXEC")); err != nil {
+			return err
+		}
+
+		return nil
+	}))
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+//CanMakeRequest communicates with the database to figure out when it is possible to make a request
+//returns true, 0 if a request can be made, and false and the amount of time to sleep when a request cannot be made
+func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config RateLimitConfig) (bool, int64) {
+	key := "status:" + h.Host
+	var canMake bool
+	var wait int64
+	var resp []string
+
+	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
+		if err := c.Do(radix.Cmd(nil,"WATCH", key)); err != nil {
+			return err
+		}
+
+		if err := h.updateStatusFromDatabase(c, key); err != nil {
+			return err
+		}
+
+		canMake, wait = h.canMakeRequestLogic(requestWeight, config)
+
+		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
+			return err
+		}
+
+		// If any of the calls after the MULTI call error it's important that
+		// the transaction is discarded. This isn't strictly necessary if the
+		// error was a network error, as the connection would be closed by the
+		// client anyway, but it's important otherwise.
+		var err error
+		defer func() {
+			if err != nil {
+				// The return from DISCARD doesn't matter. If it's an error then
+				// it's a network error and the Conn will be closed by the
+				// client.
+				c.Do(radix.Cmd(nil, "DISCARD"))
+			}
+		}()
+
+		err = c.Do(radix.FlatCmd(nil,"HSET",
+			key,
+			host, h.Host,
+			sustainedRequests, h.SustainedRequests,
+			burstRequests, h.BurstRequests,
+			pendingRequests, h.PendingRequests,
+			firstSustainedRequest, h.FirstSustainedRequest,
+			firstBurstRequest, h.FirstBurstRequest,
+		))
+		if err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.Cmd(&resp, "EXEC")); err != nil {
+			return err
+		}
+
+		return nil
+	}))
+	if err != nil {
 		return false, 0
 	}
 
-	closeConnection(c)
+	if resp == nil{
+		return false, 0
+	}
 	return canMake, wait
 }
 
-//getStatus gets the current request status information from the database and updates the struct
-func (h *RequestsStatus) updateStatusFromDatabase(p *redis.Pool, key string) error {
-	c := p.Get()
-	list, err := c.Do("HVALS", key)
+//updateStatusFromDatabase gets the current request status information from the database and updates the struct
+func (h *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) error {
+	var values []string
+	err := c.Do(radix.Cmd(&values,"HVALS", key))
 	if err != nil {
 		fmt.Print(err)
 		return err
 	}
 
-	closeConnection(c)
-
-	values, err := redis.Strings(list, err)
-	if err != nil || len(values) != 6 {
-		*h = NewRequestsStatus(h.Host, 0, 0, 0, 0, 0)
-		return err
+	if len(values) != 6 {
+		*h = NewRequestsStatus(h.Host, 0, 0, 0, 0,0)
+		return nil
 	}
 
 	host := values[0]
@@ -216,13 +223,7 @@ func (h *RequestsStatus) updateStatusFromDatabase(p *redis.Pool, key string) err
 
 	*h = NewRequestsStatus(host, sus, burst, pending, firstSus, firstBurst)
 	return nil
-}
 
-func closeConnection(c redis.Conn) {
-	err := c.Close()
-	if err != nil {
-		panic(err)
-	}
 }
 
 //canMakeRequestLogic checks to see if a request can be made
