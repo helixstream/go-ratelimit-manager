@@ -23,7 +23,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 110
+	numOfRoutines := 410
 
 	server := server()
 
@@ -48,7 +48,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := rand.Intn(10) + 5
+	numOfRequests := rand.Intn(4) + 1
 
 	for numOfRequests > 0 {
 		requestWeight := 1
