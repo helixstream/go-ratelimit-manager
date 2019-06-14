@@ -1,9 +1,9 @@
 package host
 
 import (
+	"github.com/youtube/vitess/go/ratelimiter"
 	"math/rand"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -12,11 +12,11 @@ var (
 	sustainedDuration = time.Minute
 	burstDuration     = time.Second
 
-	sustainedLimiter = newRateLimiter(serverConfig.SustainedRequestLimit, sustainedDuration)
-	burstLimiter     = newRateLimiter(serverConfig.BurstRequestLimit, burstDuration)
-	bannedLimiter    = newRateLimiter(10, sustainedDuration)
+	sustainedLimiter = ratelimiter.NewRateLimiter(serverConfig.SustainedRequestLimit, sustainedDuration)
+	burstLimiter     = ratelimiter.NewRateLimiter(serverConfig.BurstRequestLimit, burstDuration)
+	bannedLimiter    = ratelimiter.NewRateLimiter(10, sustainedDuration)
 
-	port = "8000"
+	port = "8080"
 )
 
 func serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -26,64 +26,27 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if sustainedLimiter.allow() && burstLimiter.allow() {
+	if sustainedLimiter.Allow() && burstLimiter.Allow() {
 		w.WriteHeader(200)
-	} else if bannedLimiter.allow() {
+	} else if bannedLimiter.Allow() {
 		http.Error(w, "Too many requests", 429)
 	} else {
 		http.Error(w, "Banned for too many requests", 419)
 	}
 }
 
-func server() {
+func server() *http.Server {
 	rand.Seed(time.Now().UTC().Unix())
 
-	http.HandleFunc("/testRateLimit", serveHTTP)
+	server := &http.Server{Addr: ":" + port, Handler: nil}
 
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		panic(err)
-	}
-}
+	go func() {
+		http.HandleFunc("/testRateLimit", serveHTTP)
 
-//all code below taken from:
-//https://github.com/vitessio/vitess/blob/master/go/ratelimiter/ratelimiter.go#L30
-//modified so that I could access CurCount
-
-//rate limit code
-type rateLimiter struct {
-	maxCount int
-	interval time.Duration
-
-	mu       sync.Mutex
-	curCount int
-	lastTime time.Time
-}
-
-// NewRateLimiter creates a new RateLimiter. maxCount is the max burst allowed
-// while interval specifies the duration for a burst. The effective rate limit is
-// equal to maxCount/interval. For example, if you want to a max QPS of 5000,
-// and want to limit bursts to no more than 500, you'd specify a maxCount of 500
-// and an interval of 100*time.Millilsecond.
-func newRateLimiter(maxCount int, interval time.Duration) *rateLimiter {
-	return &rateLimiter{
-		maxCount: maxCount,
-		interval: interval,
-	}
-}
-
-// Allow returns true if a request is within the rate limit norms.
-// Otherwise, it returns false.
-func (rl *rateLimiter) allow() bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	if time.Since(rl.lastTime) < rl.interval {
-		if rl.curCount > 0 {
-			rl.curCount--
-			return true
+		if err := http.ListenAndServe(":"+port, nil); err != nil {
+			panic(err)
 		}
-		return false
-	}
-	rl.curCount = rl.maxCount - 1
-	rl.lastTime = time.Now()
-	return true
+	}()
+
+	return server
 }

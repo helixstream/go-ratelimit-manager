@@ -128,7 +128,7 @@ func Test_CanMakeRequest(t *testing.T) {
 
 				status := testCases[i].status
 				expected := testCases[i].expectedStatus
-				canMake, _ := status.CanMakeRequest(testCases[i].requestWeight, testCases[i].host)
+				canMake, _ := status.canMakeRequestLogic(testCases[i].requestWeight, testCases[i].host)
 
 				if canMake != testCases[i].expectedCanMakeRequest {
 					//error if the boolean the function returns does not match the expected value

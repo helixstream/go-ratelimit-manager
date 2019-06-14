@@ -40,6 +40,9 @@ func (h *RequestsStatus) DoesKeyExist(p *redis.Pool) bool {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	closeConnection(c)
+
 	//converts resp to a string
 	stringResp, err := redis.String(resp, err)
 	if stringResp != "" {
@@ -59,6 +62,8 @@ func isConnectedToRedis(p *redis.Pool) bool {
 		log.Fatal(err)
 	}
 
+	closeConnection(c)
+
 	if pingResp != "PONG" {
 		return false
 	}
@@ -69,10 +74,9 @@ func isConnectedToRedis(p *redis.Pool) bool {
 //RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
 //should be called directly after the request has finished
 func (h *RequestsStatus) RequestFinished(requestWeight int, p *redis.Pool) {
-	//fmt.Print("request finished ")
+
 	key := "status:" + h.Host
 	c := p.Get()
-	defer c.Close()
 
 	_, err := c.Do("MULTI")
 	if err != nil {
@@ -97,6 +101,8 @@ func (h *RequestsStatus) RequestFinished(requestWeight int, p *redis.Pool) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	closeConnection(c)
 }
 
 //RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
@@ -104,9 +110,7 @@ func (h *RequestsStatus) RequestFinished(requestWeight int, p *redis.Pool) {
 func (h *RequestsStatus) RequestCancelled(requestWeight int, p *redis.Pool) {
 	key := "status:" + h.Host
 	c := p.Get()
-	defer c.Close()
 
-	//QUESTION: does this need to be a transaction since I am only updating one value?
 	_, err := c.Do("MULTI")
 	if err != nil {
 		log.Fatal(err)
@@ -121,57 +125,86 @@ func (h *RequestsStatus) RequestCancelled(requestWeight int, p *redis.Pool) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	closeConnection(c)
 }
 
 //CanMakeRequestTransaction communicates with the database to figure out when it is possible to make a request
 //returns true, 0 if a request can be made, and false and the amount of time to sleep when a request cannot be made
 //DIDN'T REALLY KNOW WHAT TO NAME THIS FUNCTION
-func (h *RequestsStatus) CanMakeRequestTransaction(p *redis.Pool, requestWeight int, config RateLimitConfig) (bool, int64) {
+func (h *RequestsStatus) CanMakeRequest(p *redis.Pool, requestWeight int, config RateLimitConfig) (bool, int64) {
 	c := p.Get()
-	defer c.Close()
+
 	key := "status:" + h.Host
 
 	//if another client modifies the val in the time between our call to WATCH and our call to EXEC the transaction will fail.
 	_, err := c.Do("WATCH", key)
+	if err != nil {
+		fmt.Print(err)
+		closeConnection(c)
+		return false, 0
+	}
 
-	h.getStatus(p, key)
+	err = h.updateStatusFromDatabase(p, key)
+	if err != nil {
+		return false, 0
+	}
 
-	canMake, wait := h.CanMakeRequest(requestWeight, config)
+	canMake, wait := h.canMakeRequestLogic(requestWeight, config)
 
 	_, err = c.Do("MULTI")
 	if err != nil {
 		fmt.Print(err)
 
+		closeConnection(c)
 		return false, 0
 	}
 
-	_, err = c.Do("HSET", key, host, h.Host, sustainedRequests, h.SustainedRequests, burstRequests, h.BurstRequests, pendingRequests, h.PendingRequests, firstSustainedRequest, h.FirstSustainedRequest, firstBurstRequest, h.FirstBurstRequest)
+	_, err = c.Do("HSET",
+		key,
+		host, h.Host,
+		sustainedRequests, h.SustainedRequests,
+		burstRequests, h.BurstRequests,
+		pendingRequests, h.PendingRequests,
+		firstSustainedRequest, h.FirstSustainedRequest,
+		firstBurstRequest, h.FirstBurstRequest,
+	)
 	if err != nil {
 		fmt.Print(err)
 
+		closeConnection(c)
 		return false, 0
 	}
 
 	resp, err := c.Do("EXEC")
-	//fmt.Printf("EXEC resp: %v, %v. ", resp, err)
 	if resp == nil || err != nil {
-		//fmt.Print(err)
+		if err != nil {
+			fmt.Print(err)
+		}
 
+		closeConnection(c)
 		return false, 0
 	}
 
+	closeConnection(c)
 	return canMake, wait
 }
 
 //getStatus gets the current request status information from the database and updates the struct
-func (h *RequestsStatus) getStatus(p *redis.Pool, key string) {
+func (h *RequestsStatus) updateStatusFromDatabase(p *redis.Pool, key string) error {
 	c := p.Get()
-	defer c.Close()
 	list, err := c.Do("HVALS", key)
+	if err != nil {
+		fmt.Print(err)
+		return err
+	}
+
+	closeConnection(c)
+
 	values, err := redis.Strings(list, err)
 	if err != nil || len(values) != 6 {
 		*h = NewRequestsStatus(h.Host, 0, 0, 0, 0, 0)
-		return
+		return err
 	}
 
 	host := values[0]
@@ -182,12 +215,20 @@ func (h *RequestsStatus) getStatus(p *redis.Pool, key string) {
 	firstBurst, _ := strconv.ParseInt(values[5], 10, 64)
 
 	*h = NewRequestsStatus(host, sus, burst, pending, firstSus, firstBurst)
+	return nil
 }
 
-//CanMakeRequest checks to see if a request can be made
+func closeConnection(c redis.Conn) {
+	err := c.Close()
+	if err != nil {
+		panic(err)
+	}
+}
+
+//canMakeRequestLogic checks to see if a request can be made
 //returns true, 0 if request can be made
 //returns false and the number of milliseconds to wait if a request cannot be made
-func (h *RequestsStatus) CanMakeRequest(requestWeight int, config RateLimitConfig) (bool, int64) {
+func (h *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimitConfig) (bool, int64) {
 	now := GetUnixTimeMilliseconds()
 	//if request is in the current burst period
 	if h.isInBurstPeriod(now, config) {
