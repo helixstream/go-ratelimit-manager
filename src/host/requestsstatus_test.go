@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func Test_CanMakeRequest(t *testing.T) {
+func Test_CanMakeRequestLogic(t *testing.T) {
 	hosts := []RateLimitConfig{
 		NewRateLimitConfig("test_host_1", 1200, 60, 20, 1),
 		NewRateLimitConfig("test_host_2", 600, 60, 20, 1),

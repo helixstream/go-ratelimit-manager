@@ -190,9 +190,11 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 		return nil
 	}))
 	if err != nil {
+		fmt.Printf("Error: %v. ", err)
 		return false, 0
 	}
-
+	//resp is the response to the EXEC command
+	//if resp is nil the transaction was aborted
 	if resp == nil {
 		return false, 0
 	}
@@ -222,7 +224,6 @@ func (h *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 
 	*h = NewRequestsStatus(host, sus, burst, pending, firstSus, firstBurst)
 	return nil
-
 }
 
 //canMakeRequestLogic checks to see if a request can be made

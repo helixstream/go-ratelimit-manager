@@ -7,6 +7,8 @@ import (
 	"github.com/mediocregopher/radix"
 	"math/rand"
 	"net/http"
+	url2 "net/url"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -14,24 +16,40 @@ import (
 //pool of connections to redis database
 var pool, err = radix.NewPool("tcp", "127.0.0.1:6379", 500)
 
-func Test_CanMakeTestTransaction(t *testing.T) {
+func Test_CanMakeRequest(t *testing.T) {
 	//handles creating new pool error
 	if err != nil {
 		panic(err)
 	}
 
+	err = pool.Do(radix.FlatCmd(nil, "HSET",
+		"status:"+serverConfig.Host,
+		host, serverConfig.Host,
+		sustainedRequests, 0,
+		burstRequests, 0,
+		pendingRequests, 0,
+		firstSustainedRequest, 0,
+		firstBurstRequest, 0,
+	))
+
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 410
+	numOfRoutines := 500
 
-	server := server()
+	server := getServer()
 
-	fmt.Print("testing concurrent requests")
+	fmt.Print("testing concurrent requests ")
+
+	testConfig := NewRateLimitConfig(serverConfig.Host,
+		serverConfig.SustainedRequestLimit-1,
+		serverConfig.SustainedTimePeriod,
+		serverConfig.BurstRequestLimit-1,
+		serverConfig.BurstTimePeriod)
 
 	for i := 0; i < numOfRoutines; i++ {
 		//ServerConfig is a global variable declared in server.go
-		go makeRequests(t, serverConfig, i, channel)
+		go makeRequests(t, testConfig, i, channel)
 	}
 
 	for i := 0; i < numOfRoutines; i++ {
@@ -48,34 +66,40 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := rand.Intn(4) + 1
+	numOfRequests := rand.Intn(3) + 1
 
 	for numOfRequests > 0 {
-		requestWeight := 1
+
+		requestWeight := rand.Intn(2) + 1
 
 		canMake, sleepTime := requestStatus.CanMakeRequest(pool, requestWeight, hostConfig)
 
 		if canMake {
-			statusCode, err := getStatusCode("http://127.0.0.1:" + port + "/testRateLimit")
+			//fmt.Printf("Can Make: %v \n", requestStatus)
+			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
 			if err != nil {
-				t.Error(err)
+				t.Errorf("Error on getting Status Code: %v. ", err)
 			}
 
 			if statusCode == 500 {
 				if err := requestStatus.RequestCancelled(requestWeight, pool); err != nil {
-					t.Error(err)
+					t.Errorf("Error on Request Cancelled: %v. ", err)
 				}
 
 			} else if statusCode == 200 {
 				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
-					t.Error(err)
+					t.Errorf("Error on Request Finished: %v. ", err)
 				}
-				numOfRequests--
+				numOfRequests -= requestWeight
 			} else {
-				t.Errorf("Routine: %v. %v", id, statusCode)
+				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
+					t.Errorf("Error on Request Finished: %v. ", err)
+				}
+				fmt.Printf("Routine: %v. %v. %v, ", id, statusCode, requestStatus)
+				t.Errorf("Routine: %v. %v. ", id, statusCode)
 			}
 
-		} else {
+		} else if sleepTime != 0 {
 			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}
@@ -84,8 +108,8 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 	c <- "done"
 }
 
-func getStatusCode(url string) (int, error) {
-	resp, err := http.Get(url)
+func getStatusCode(url string, weight int) (int, error) {
+	resp, err := http.PostForm(url, url2.Values{"weight": {strconv.Itoa(weight)}})
 	if err != nil {
 		return 0, err
 	} else if resp != nil {
