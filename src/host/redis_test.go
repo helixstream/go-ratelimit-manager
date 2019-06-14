@@ -23,7 +23,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 410
+	numOfRoutines := 1000
 
 	server := server()
 
@@ -72,6 +72,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 				}
 				numOfRequests--
 			} else {
+				fmt.Printf("Routine: %v. %v", id, statusCode)
 				t.Errorf("Routine: %v. %v", id, statusCode)
 			}
 
