@@ -23,7 +23,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 3000
+	numOfRoutines := 110
 
 	server := server()
 
@@ -48,12 +48,10 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := rand.Intn(4) + 1
-	//sleep to make sure that we do not flood redis with requests at the start of the program
-	time.Sleep(time.Duration(rand.Intn(200)) * time.Millisecond)
+	numOfRequests := rand.Intn(10) + 5
 
 	for numOfRequests > 0 {
-		requestWeight := rand.Intn(5) + 1
+		requestWeight := 1
 
 		canMake, sleepTime := requestStatus.CanMakeRequest(pool, requestWeight, hostConfig)
 
@@ -73,7 +71,6 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 					t.Error(err)
 				}
 				numOfRequests--
-
 			} else {
 				t.Errorf("Routine: %v. %v", id, statusCode)
 			}
@@ -138,7 +135,7 @@ func Test_RequestCancelled(t *testing.T) {
 		s := testCases[i].status
 
 		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
-			err = pool.Do(radix.FlatCmd(nil,"HSET",
+			err = pool.Do(radix.FlatCmd(nil, "HSET",
 				key,
 				host, s.Host,
 				sustainedRequests, s.SustainedRequests,
@@ -205,7 +202,7 @@ func Test_RequestFinished(t *testing.T) {
 		s := testCases[i].status
 
 		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
-			err = pool.Do(radix.FlatCmd(nil,"HSET",
+			err = pool.Do(radix.FlatCmd(nil, "HSET",
 				key,
 				host, s.Host,
 				sustainedRequests, s.SustainedRequests,
@@ -255,7 +252,7 @@ func Test_updateStatusFromDatabase(t *testing.T) {
 		newStatus := NewRequestsStatus("testHost", 0, 0, 0, 0, 0)
 
 		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
-			err = c.Do(radix.FlatCmd(nil,"HSET",
+			err = c.Do(radix.FlatCmd(nil, "HSET",
 				key,
 				host, s.Host,
 				sustainedRequests, s.SustainedRequests,
@@ -284,4 +281,3 @@ func Test_updateStatusFromDatabase(t *testing.T) {
 		}
 	}
 }
-

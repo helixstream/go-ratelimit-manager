@@ -41,7 +41,6 @@ func isConnectedToRedis(p *radix.Pool) bool {
 	return true
 }
 
-//THIS SHOULD RETURN AN ERROR
 //RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
 //should be called directly after the request has finished
 func (h *RequestsStatus) RequestFinished(requestWeight int, p *radix.Pool) error {
@@ -91,7 +90,7 @@ func (h *RequestsStatus) RequestFinished(requestWeight int, p *radix.Pool) error
 
 	return nil
 }
-//THIS SHOULD RETURN AN ERROR
+
 //RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
 //and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
 func (h *RequestsStatus) RequestCancelled(requestWeight int, p *radix.Pool) error {
@@ -143,7 +142,7 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 	var resp []string
 
 	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
-		if err := c.Do(radix.Cmd(nil,"WATCH", key)); err != nil {
+		if err := c.Do(radix.Cmd(nil, "WATCH", key)); err != nil {
 			return err
 		}
 
@@ -171,7 +170,7 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 			}
 		}()
 
-		err = c.Do(radix.FlatCmd(nil,"HSET",
+		err = c.Do(radix.FlatCmd(nil, "HSET",
 			key,
 			host, h.Host,
 			sustainedRequests, h.SustainedRequests,
@@ -194,7 +193,7 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 		return false, 0
 	}
 
-	if resp == nil{
+	if resp == nil {
 		return false, 0
 	}
 	return canMake, wait
@@ -203,14 +202,14 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 //updateStatusFromDatabase gets the current request status information from the database and updates the struct
 func (h *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) error {
 	var values []string
-	err := c.Do(radix.Cmd(&values,"HVALS", key))
+	err := c.Do(radix.Cmd(&values, "HVALS", key))
 	if err != nil {
 		fmt.Print(err)
 		return err
 	}
 
 	if len(values) != 6 {
-		*h = NewRequestsStatus(h.Host, 0, 0, 0, 0,0)
+		*h = NewRequestsStatus(h.Host, 0, 0, 0, 0, 0)
 		return nil
 	}
 

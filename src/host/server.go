@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	serverConfig      = NewRateLimitConfig("transactionTestHost3", 5000, 60, 85, 1)
+	serverConfig      = NewRateLimitConfig("transactionTestHost3", 3570, 60, 60, 1)
 	sustainedDuration = time.Minute
 	burstDuration     = time.Second
 
@@ -16,7 +16,7 @@ var (
 	burstLimiter     = ratelimiter.NewRateLimiter(serverConfig.BurstRequestLimit, burstDuration)
 	bannedLimiter    = ratelimiter.NewRateLimiter(10, sustainedDuration)
 
-	port = "8080"
+	port = "8000"
 )
 
 func serveHTTP(w http.ResponseWriter, r *http.Request) {
