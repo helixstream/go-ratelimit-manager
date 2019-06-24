@@ -23,9 +23,9 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 1000
+	numOfRoutines := 500
 
-	server := server()
+	server := getServer()
 
 	fmt.Print("testing concurrent requests")
 
@@ -48,7 +48,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := rand.Intn(4) + 1
+	numOfRequests := 3//rand.Intn(2) + 1
 
 	for numOfRequests > 0 {
 		requestWeight := 1
@@ -58,22 +58,22 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 		if canMake {
 			statusCode, err := getStatusCode("http://127.0.0.1:" + port + "/testRateLimit")
 			if err != nil {
-				t.Error(err)
+				t.Errorf("Error on getting Status Code: %v. ", err)
 			}
 
 			if statusCode == 500 {
 				if err := requestStatus.RequestCancelled(requestWeight, pool); err != nil {
-					t.Error(err)
+					t.Errorf("Error on Request Cancelled: %v. ", err)
 				}
 
 			} else if statusCode == 200 {
 				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
-					t.Error(err)
+					t.Errorf("Error on Request Finished: %v. ", err)
 				}
 				numOfRequests--
 			} else {
-				fmt.Printf("Routine: %v. %v", id, statusCode)
-				t.Errorf("Routine: %v. %v", id, statusCode)
+				fmt.Printf("Routine: %v. %v. ", id, statusCode)
+				t.Errorf("Routine: %v. %v. ", id, statusCode)
 			}
 
 		} else {

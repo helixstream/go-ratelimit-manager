@@ -35,7 +35,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func server() *http.Server {
+func getServer() *http.Server {
 	rand.Seed(time.Now().UTC().Unix())
 
 	server := &http.Server{Addr: ":" + port, Handler: nil}
