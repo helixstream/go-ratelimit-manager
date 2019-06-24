@@ -20,7 +20,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 		panic(err)
 	}
 
-	/*err = pool.Do(radix.FlatCmd(nil, "HSET",
+	err = pool.Do(radix.FlatCmd(nil, "HSET",
 		"status:" + serverConfig.Host,
 		host, serverConfig.Host,
 		sustainedRequests, 0,
@@ -30,7 +30,6 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 		firstBurstRequest, 0,
 	))
 
-	 */
 
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
@@ -70,7 +69,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 
 
 		if canMake {
-			fmt.Printf("%v %v \n", id, requestStatus)
+			//fmt.Printf("%v %v \n", id, requestStatus)
 			statusCode, err := getStatusCode("http://127.0.0.1:" + port + "/testRateLimit")
 			if err != nil {
 				t.Errorf("Error on getting Status Code: %v. ", err)
