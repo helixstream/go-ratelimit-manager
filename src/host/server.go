@@ -28,7 +28,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if sustainedLimiter.Allow() && burstLimiter.Allow() {
-		fmt.Print(burstLimiter.curCount)
+		fmt.Printf(" %v ", burstLimiter.curCount)
 		w.WriteHeader(200)
 	} else if bannedLimiter.Allow() {
 		http.Error(w, "Too many requests", 429)
