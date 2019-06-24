@@ -34,10 +34,13 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if sustainedLimiter.AllowN(time.Now(), weight) && burstLimiter.AllowN(time.Now(), weight) {
 		w.WriteHeader(200)
+		return
 	} else if bannedLimiter.Allow() {
 		http.Error(w, "Too many requests", 429)
+		return
 	} else {
 		http.Error(w, "Banned for too many requests", 419)
+		return
 	}
 }
 

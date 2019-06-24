@@ -90,10 +90,11 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 					t.Errorf("Error on Request Finished: %v. ", err)
 				}
 				fmt.Printf("Routine: %v. %v. %v, ", id, statusCode, requestStatus)
-				t.Errorf("Routine: %v. %v. ", id, statusCode)
+				t.Errorf("Routine: %v. %v. %t. %d.", id, statusCode, canMake, sleepTime)
 			}
 
 		} else {
+			fmt.Printf("SLEEP: %d", sleepTime)
 			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}
@@ -106,7 +107,9 @@ func getStatusCode(url string, weight int) (int, error) {
 	resp, err := http.PostForm(url, url2.Values{"weight": {strconv.Itoa(weight)}})
 	if err != nil {
 		return 0, err
-	} else if resp != nil {
+	}
+
+	if resp != nil {
 		return resp.StatusCode, resp.Body.Close()
 	}
 
