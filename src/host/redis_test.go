@@ -77,7 +77,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 			}
 
 		} else {
-			time.Sleep(time.Duration(sleepTime + 1) * time.Millisecond)
+			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}
 
