@@ -42,9 +42,9 @@ func Test_CanMakeRequest(t *testing.T) {
 	fmt.Print("testing concurrent requests")
 
 	testConfig := NewRateLimitConfig(serverConfig.Host,
-									serverConfig.SustainedRequestLimit,
+									serverConfig.SustainedRequestLimit-1,
 									serverConfig.SustainedTimePeriod,
-									serverConfig.BurstRequestLimit,
+									serverConfig.BurstRequestLimit-1,
 									serverConfig.BurstTimePeriod)
 
 	for i := 0; i < numOfRoutines; i++ {
