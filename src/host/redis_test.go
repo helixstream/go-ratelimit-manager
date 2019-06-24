@@ -20,14 +20,24 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 		panic(err)
 	}
 
+	err = pool.Do(radix.FlatCmd(nil, "HSET",
+		"status:" + serverConfig.Host,
+		host, serverConfig.Host,
+		sustainedRequests, 0,
+		burstRequests, 0,
+		pendingRequests, 0,
+		firstSustainedRequest, 0,
+		firstBurstRequest, 0,
+	))
+
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 1000
+	numOfRoutines := 2
 
 	server := getServer()
 
-	fmt.Printf("testing concurrent requests: %v, ", time.Now().UTC().UnixNano())
+	fmt.Print("testing concurrent requests")
 
 	for i := 0; i < numOfRoutines; i++ {
 		//ServerConfig is a global variable declared in server.go
@@ -48,14 +58,17 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := 1//rand.Intn(2) + 1
+	numOfRequests := 100//rand.Intn(2) + 1
 
 	for numOfRequests > 0 {
+
 		requestWeight := 1
 
 		canMake, sleepTime := requestStatus.CanMakeRequest(pool, requestWeight, hostConfig)
 
+
 		if canMake {
+			fmt.Printf("%v %v \n", id, requestStatus)
 			statusCode, err := getStatusCode("http://127.0.0.1:" + port + "/testRateLimit")
 			if err != nil {
 				t.Errorf("Error on getting Status Code: %v. ", err)
@@ -63,6 +76,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 
 			if statusCode == 500 {
 				if err := requestStatus.RequestCancelled(requestWeight, pool); err != nil {
+					fmt.Print("500 \n")
 					t.Errorf("Error on Request Cancelled: %v. ", err)
 				}
 
@@ -70,8 +84,12 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
 					t.Errorf("Error on Request Finished: %v. ", err)
 				}
+				//fmt.Printf(" %v \n", requestStatus)
 				numOfRequests--
 			} else {
+				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
+					t.Errorf("Error on Request Finished: %v. ", err)
+				}
 				fmt.Printf("Routine: %v. %v. %v, %v", id, statusCode, time.Now().UTC().UnixNano(), requestStatus)
 				t.Errorf("Routine: %v. %v. ", id, statusCode)
 			}

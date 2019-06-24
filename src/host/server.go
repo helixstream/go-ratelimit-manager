@@ -1,7 +1,6 @@
 package host
 
 import (
-	"fmt"
 	"math/rand"
 	"net/http"
 	"sync"
@@ -9,7 +8,7 @@ import (
 )
 
 var (
-	serverConfig      = NewRateLimitConfig("transactionTestHost3", 6000, 60, 100, 1)
+	serverConfig      = NewRateLimitConfig("transactionTestHost3", 6000, 60, 60, 1)
 	sustainedDuration = time.Minute
 	burstDuration     = time.Second
 
@@ -17,7 +16,7 @@ var (
 	burstLimiter     = NewRateLimiter(serverConfig.BurstRequestLimit, burstDuration)
 	bannedLimiter    = NewRateLimiter(10, sustainedDuration)
 
-	port = "8000"
+	port = "8080"
 )
 
 func serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +27,6 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if sustainedLimiter.Allow() && burstLimiter.Allow() {
-		fmt.Printf(" %v ", burstLimiter.curCount)
 		w.WriteHeader(200)
 	} else if bannedLimiter.Allow() {
 		http.Error(w, "Too many requests", 429)
@@ -44,7 +42,6 @@ func getServer() *http.Server {
 
 	go func() {
 		http.HandleFunc("/testRateLimit", serveHTTP)
-
 		if err := http.ListenAndServe(":"+port, nil); err != nil {
 			panic(err)
 		}
