@@ -1,6 +1,7 @@
 package host
 
 import (
+	"fmt"
 	"math/rand"
 	"net/http"
 	"sync"
@@ -27,7 +28,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if sustainedLimiter.Allow() && burstLimiter.Allow() {
-		//fmt.Printf(" %v \n", burstLimiter.lastTime)
+		fmt.Printf(" %v \n", burstLimiter.lastTime)
 		w.WriteHeader(200)
 	} else if bannedLimiter.Allow() {
 		http.Error(w, "Too many requests", 429)
