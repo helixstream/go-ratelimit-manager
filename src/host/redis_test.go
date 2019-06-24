@@ -72,29 +72,29 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 			fmt.Printf("Can Make: %v %v %v \n", id, requestWeight, requestStatus)
 			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
 			if err != nil {
-				t.Errorf("Error on getting Status Code: %v. ", err)
+				t.Errorf("Error on getting Status Code: %v. \n", err)
 			}
 
 			if statusCode == 500 {
 				if err := requestStatus.RequestCancelled(requestWeight, pool); err != nil {
-					t.Errorf("Error on Request Cancelled: %v. ", err)
+					t.Errorf("Error on Request Cancelled: %v. \n", err)
 				}
 
 			} else if statusCode == 200 {
 				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
-					t.Errorf("Error on Request Finished: %v. ", err)
+					t.Errorf("Error on Request Finished: %v. \n", err)
 				}
 				numOfRequests -= requestWeight
 			} else {
 				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
-					t.Errorf("Error on Request Finished: %v. ", err)
+					t.Errorf("Error on Request Finished: %v. \n", err)
 				}
-				fmt.Printf("Routine: %v. %v. %v, ", id, statusCode, requestStatus)
-				t.Errorf("Routine: %v. %v. %t. %d.", id, statusCode, canMake, sleepTime)
+				fmt.Printf("Routine: %v. %v. %v, \n", id, statusCode, requestStatus)
+				t.Errorf("Routine: %v. %v. %t. %d. \n", id, statusCode, canMake, sleepTime)
 			}
 
 		} else {
-			fmt.Printf("Sleep: %d", sleepTime)
+			fmt.Printf("Sleep: %d \n", sleepTime)
 			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}
