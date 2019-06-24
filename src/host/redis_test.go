@@ -72,7 +72,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 				}
 				numOfRequests--
 			} else {
-				fmt.Printf("Routine: %v. %v. %v,", id, statusCode, time.Now().UTC().UnixNano())
+				fmt.Printf("Routine: %v. %v. %v, %v", id, statusCode, time.Now().UTC().UnixNano(), requestStatus)
 				t.Errorf("Routine: %v. %v. ", id, statusCode)
 			}
 
