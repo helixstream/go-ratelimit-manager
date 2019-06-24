@@ -190,12 +190,12 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 		return nil
 	}))
 	if err != nil {
-		panic(err)
+		//msg := "Here" + err.Error()
+		//panic(msg)
 		return false, 0
 	}
 
 	if resp == nil {
-		//fmt.Print("Response is nil")
 		return false, 0
 	}
 	return canMake, wait

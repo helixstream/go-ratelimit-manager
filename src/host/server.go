@@ -12,9 +12,9 @@ var (
 	sustainedDuration = time.Minute
 	burstDuration     = time.Second
 
-	sustainedLimiter = NewRateLimiter(serverConfig.SustainedRequestLimit, sustainedDuration)
-	burstLimiter     = NewRateLimiter(serverConfig.BurstRequestLimit, burstDuration)
-	bannedLimiter    = NewRateLimiter(10, sustainedDuration)
+	sustainedLimiter = NewRateLimiter(serverConfig.SustainedRequestLimit, 60)
+	burstLimiter     = NewRateLimiter(serverConfig.BurstRequestLimit, 1)
+	bannedLimiter    = NewRateLimiter(10, 60)
 
 	port = "8080"
 )
@@ -27,6 +27,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if sustainedLimiter.Allow() && burstLimiter.Allow() {
+		//fmt.Printf(" %v \n", burstLimiter.lastTime)
 		w.WriteHeader(200)
 	} else if bannedLimiter.Allow() {
 		http.Error(w, "Too many requests", 429)
@@ -52,11 +53,11 @@ func getServer() *http.Server {
 
 type RateLimiter struct {
 	maxCount int
-	interval time.Duration
+	interval int64
 
 	mu       sync.Mutex
 	curCount int
-	lastTime time.Time
+	lastTime int64
 }
 
 // NewRateLimiter creates a new RateLimiter. maxCount is the max burst allowed
@@ -64,7 +65,7 @@ type RateLimiter struct {
 // equal to maxCount/interval. For example, if you want to a max QPS of 5000,
 // and want to limit bursts to no more than 500, you'd specify a maxCount of 500
 // and an interval of 100*time.Millilsecond.
-func NewRateLimiter(maxCount int, interval time.Duration) *RateLimiter {
+func NewRateLimiter(maxCount int, interval int64) *RateLimiter {
 	return &RateLimiter{
 		maxCount: maxCount,
 		interval: interval,
@@ -76,7 +77,8 @@ func NewRateLimiter(maxCount int, interval time.Duration) *RateLimiter {
 func (rl *RateLimiter) Allow() bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	if time.Since(rl.lastTime) < rl.interval {
+	now := time.Now().UTC().UnixNano()
+	if now - rl.lastTime < rl.interval * 1000000000 {
 		if rl.curCount > 0 {
 			rl.curCount--
 			return true
@@ -84,6 +86,6 @@ func (rl *RateLimiter) Allow() bool {
 		return false
 	}
 	rl.curCount = rl.maxCount - 1
-	rl.lastTime = time.Now()
+	rl.lastTime = time.Now().UTC().UnixNano()
 	return true
 }
