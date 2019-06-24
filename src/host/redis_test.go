@@ -23,7 +23,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 500
+	numOfRoutines := 1000
 
 	server := getServer()
 
