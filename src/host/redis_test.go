@@ -41,9 +41,15 @@ func Test_CanMakeRequest(t *testing.T) {
 
 	fmt.Print("testing concurrent requests")
 
+	testConfig := NewRateLimitConfig(serverConfig.Host,
+									serverConfig.SustainedRequestLimit,
+									serverConfig.SustainedTimePeriod,
+									serverConfig.BurstRequestLimit,
+									serverConfig.BurstTimePeriod)
+
 	for i := 0; i < numOfRoutines; i++ {
 		//ServerConfig is a global variable declared in server.go
-		go makeRequests(t, serverConfig, i, channel)
+		go makeRequests(t, testConfig, i, channel)
 	}
 
 	for i := 0; i < numOfRoutines; i++ {
