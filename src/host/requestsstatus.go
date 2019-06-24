@@ -140,6 +140,7 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 	var canMake bool
 	var wait int64
 	var resp []string
+	//var respWatch []string
 
 	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
 		if err := c.Do(radix.Cmd(nil, "WATCH", key)); err != nil {
@@ -190,9 +191,11 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 		return nil
 	}))
 	if err != nil {
+		fmt.Printf("Error: %v. ", err)
 		return false, 0
 	}
-
+	//resp is the response to the EXEC command
+	//if resp is nil the transaction was aborted
 	if resp == nil {
 		return false, 0
 	}
