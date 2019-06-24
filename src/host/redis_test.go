@@ -69,7 +69,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 		canMake, sleepTime := requestStatus.CanMakeRequest(pool, requestWeight, hostConfig)
 
 		if canMake {
-			fmt.Printf(" %v %v %v \n", id, requestWeight, requestStatus)
+			fmt.Printf("Can Make: %v %v %v \n", id, requestWeight, requestStatus)
 			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
 			if err != nil {
 				t.Errorf("Error on getting Status Code: %v. ", err)
@@ -94,7 +94,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 			}
 
 		} else {
-			fmt.Printf("SLEEP: %d", sleepTime)
+			fmt.Printf("Sleep: %d", sleepTime)
 			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}
