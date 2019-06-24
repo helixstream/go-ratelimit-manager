@@ -27,7 +27,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 
 	server := getServer()
 
-	fmt.Print("testing concurrent requests")
+	fmt.Printf("testing concurrent requests: %v, ", time.Now().UTC().UnixNano())
 
 	for i := 0; i < numOfRoutines; i++ {
 		//ServerConfig is a global variable declared in server.go
@@ -48,7 +48,7 @@ func Test_CanMakeTestTransaction(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := 3//rand.Intn(2) + 1
+	numOfRequests := 1//rand.Intn(2) + 1
 
 	for numOfRequests > 0 {
 		requestWeight := 1
@@ -72,12 +72,12 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 				}
 				numOfRequests--
 			} else {
-				fmt.Printf("Routine: %v. %v. ", id, statusCode)
+				fmt.Printf("Routine: %v. %v. %v,", id, statusCode, time.Now().UTC().UnixNano())
 				t.Errorf("Routine: %v. %v. ", id, statusCode)
 			}
 
 		} else {
-			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+			time.Sleep(time.Duration(sleepTime + 1) * time.Millisecond)
 		}
 	}
 
