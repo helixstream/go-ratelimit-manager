@@ -190,8 +190,6 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 		return nil
 	}))
 	if err != nil {
-		//msg := "Here" + err.Error()
-		//panic(msg)
 		return false, 0
 	}
 
@@ -224,7 +222,6 @@ func (h *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 
 	*h = NewRequestsStatus(host, sus, burst, pending, firstSus, firstBurst)
 	return nil
-
 }
 
 //canMakeRequestLogic checks to see if a request can be made
@@ -320,7 +317,7 @@ func (h *RequestsStatus) timeUntilEndOfSustained(currentTime int64, host RateLim
 	// 											converts from seconds to milliseconds
 	endOfPeriod := h.getFirstSustainedRequest() + (host.SustainedTimePeriod * 1000)
 
-	return (endOfPeriod - currentTime) + 1
+	return endOfPeriod - currentTime
 }
 
 //timeUntilEndOfBurst calculates the time in milliseconds until the end of the burst period
@@ -328,7 +325,7 @@ func (h *RequestsStatus) timeUntilEndOfBurst(currentTime int64, host RateLimitCo
 	//  								converts from seconds to milliseconds
 	endOfPeriod := h.getFirstBurstRequest() + (host.BurstTimePeriod * 1000)
 
-	return (endOfPeriod - currentTime) + 1
+	return endOfPeriod - currentTime
 }
 
 //GetUnixTimeMilliseconds returns the current UTC time in milliseconds
