@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	url2 "net/url"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -34,15 +35,21 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 200
+	numOfRoutines := 500
 
 	server := getServer()
 
-	fmt.Print("testing concurrent requests")
+	fmt.Print("testing concurrent requests ")
+
+	testConfig := NewRateLimitConfig(serverConfig.Host,
+		serverConfig.SustainedRequestLimit-1,
+		serverConfig.SustainedTimePeriod,
+		serverConfig.BurstRequestLimit-1,
+		serverConfig.BurstTimePeriod)
 
 	for i := 0; i < numOfRoutines; i++ {
 		//ServerConfig is a global variable declared in server.go
-		go makeRequests(t, serverConfig, i, channel)
+		go makeRequests(t, testConfig, i, channel)
 	}
 
 	for i := 0; i < numOfRoutines; i++ {
@@ -59,16 +66,17 @@ func Test_CanMakeRequest(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := 2
+	numOfRequests := rand.Intn(3) + 1
 
 	for numOfRequests > 0 {
 
-		requestWeight := rand.Intn(4) + 1
+		requestWeight := rand.Intn(2) + 1
 
 		canMake, sleepTime := requestStatus.CanMakeRequest(pool, requestWeight, hostConfig)
 
 		if canMake {
-			statusCode, err := getStatusCode("http://127.0.0.1:" + port + "/testRateLimit")
+			//fmt.Printf("Can Make: %v \n", requestStatus)
+			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
 			if err != nil {
 				t.Errorf("Error on getting Status Code: %v. ", err)
 			}
@@ -82,7 +90,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
 					t.Errorf("Error on Request Finished: %v. ", err)
 				}
-				numOfRequests--
+				numOfRequests -= requestWeight
 			} else {
 				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
 					t.Errorf("Error on Request Finished: %v. ", err)
@@ -91,7 +99,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 				t.Errorf("Routine: %v. %v. ", id, statusCode)
 			}
 
-		} else {
+		} else if sleepTime != 0 {
 			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}
@@ -100,8 +108,8 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 	c <- "done"
 }
 
-func getStatusCode(url string) (int, error) {
-	resp, err := http.PostForm(url, url2.Values{"weight": {"1"}})
+func getStatusCode(url string, weight int) (int, error) {
+	resp, err := http.PostForm(url, url2.Values{"weight": {strconv.Itoa(weight)}})
 	if err != nil {
 		return 0, err
 	} else if resp != nil {
