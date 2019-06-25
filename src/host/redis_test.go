@@ -129,8 +129,6 @@ func Test_PING(t *testing.T) {
 
 func Test_RequestCancelled(t *testing.T) {
 
-	key := "status:" + "testHost"
-
 	type TestRequestStatus struct {
 		requestWeight int
 		status        RequestsStatus
@@ -154,6 +152,8 @@ func Test_RequestCancelled(t *testing.T) {
 			NewRequestsStatus("testHost", 0, 0, 5, 0, 0),
 		},
 	}
+
+	key := testCases[0].status.getHostKey()
 
 	for i := 0; i < len(testCases); i++ {
 		s := testCases[i].status
@@ -196,7 +196,6 @@ func Test_RequestCancelled(t *testing.T) {
 }
 
 func Test_RequestFinished(t *testing.T) {
-	key := "status:" + "testHost"
 
 	type TestRequestStatus struct {
 		requestWeight int
@@ -221,6 +220,8 @@ func Test_RequestFinished(t *testing.T) {
 			NewRequestsStatus("testHost", 40, 5, 5, 0, 0),
 		},
 	}
+
+	key := testCases[0].status.getHostKey()
 
 	for i := 0; i < len(testCases); i++ {
 		s := testCases[i].status
@@ -263,13 +264,13 @@ func Test_RequestFinished(t *testing.T) {
 
 func Test_updateStatusFromDatabase(t *testing.T) {
 
-	key := "status:" + "testHost"
-
 	testCases := []RequestsStatus{
 		NewRequestsStatus("testHost", 5, 2, 10, 2126523, 2343),
 		NewRequestsStatus("testHost", 0, 40, 3, 236436, 0),
 		NewRequestsStatus("testHost", 35, 0, 10, 0, 9545456),
 	}
+
+	key := testCases[0].getHostKey()
 
 	for i := 0; i < len(testCases); i++ {
 		s := testCases[i]

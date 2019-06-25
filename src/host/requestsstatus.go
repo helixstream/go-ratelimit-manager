@@ -44,7 +44,7 @@ func isConnectedToRedis(p *radix.Pool) bool {
 //RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
 //should be called directly after the request has finished
 func (h *RequestsStatus) RequestFinished(requestWeight int, p *radix.Pool) error {
-	key := "status:" + h.Host
+	key := h.getHostKey()
 	//this is radix's way of doing a transaction
 	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
 		//start of transaction
@@ -94,7 +94,7 @@ func (h *RequestsStatus) RequestFinished(requestWeight int, p *radix.Pool) error
 //RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
 //and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
 func (h *RequestsStatus) RequestCancelled(requestWeight int, p *radix.Pool) error {
-	key := "status:" + h.Host
+	key := h.getHostKey()
 	//this is radix's way of doing a transaction
 	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
 
@@ -136,7 +136,7 @@ func (h *RequestsStatus) RequestCancelled(requestWeight int, p *radix.Pool) erro
 //CanMakeRequest communicates with the database to figure out when it is possible to make a request
 //returns true, 0 if a request can be made, and false and the amount of time to sleep when a request cannot be made
 func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config RateLimitConfig) (bool, int64) {
-	key := "status:" + h.Host
+	key := h.getHostKey()
 	var canMake bool
 	var wait int64
 	var resp []string
@@ -224,6 +224,10 @@ func (h *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 
 	*h = NewRequestsStatus(host, sus, burst, pending, firstSus, firstBurst)
 	return nil
+}
+
+func (h *RequestsStatus) getHostKey() string {
+	return "status:" + h.Host
 }
 
 //canMakeRequestLogic checks to see if a request can be made
