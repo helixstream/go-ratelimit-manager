@@ -94,8 +94,10 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 			}
 
 		} else {
-			fmt.Printf("Sleep: %d \n", sleepTime)
-			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+			if sleepTime > 0 {
+				fmt.Printf("Sleep: %d \n", sleepTime)
+				time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+			}
 		}
 	}
 
