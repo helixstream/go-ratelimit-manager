@@ -35,17 +35,17 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 1000
+	numOfRoutines := 500
 
 	server := getServer()
 
 	fmt.Print("testing concurrent requests")
 
 	testConfig := NewRateLimitConfig(serverConfig.Host,
-									serverConfig.SustainedRequestLimit,
-									serverConfig.SustainedTimePeriod,
-									serverConfig.BurstRequestLimit,
-									serverConfig.BurstTimePeriod)
+		serverConfig.SustainedRequestLimit - 1,
+		serverConfig.SustainedTimePeriod,
+		serverConfig.BurstRequestLimit - 1,
+		serverConfig.BurstTimePeriod)
 
 	for i := 0; i < numOfRoutines; i++ {
 		//ServerConfig is a global variable declared in server.go
@@ -66,7 +66,7 @@ func Test_CanMakeRequest(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := rand.Intn(2) + 1
+	numOfRequests := rand.Intn(3) + 1
 
 	for numOfRequests > 0 {
 
@@ -99,8 +99,8 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 				t.Errorf("Routine: %v. %v. ", id, statusCode)
 			}
 
-		} else {
-			time.Sleep(time.Duration(sleepTime) * time.Nanosecond)
+		} else if sleepTime != 0 {
+			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}
 

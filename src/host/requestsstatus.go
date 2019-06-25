@@ -287,14 +287,14 @@ func (h *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 func (h *RequestsStatus) isInSustainedPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
 	timeSincePeriodStart := currentTime - h.getFirstSustainedRequest()
 	//								converts seconds to milliseconds
-	return timeSincePeriodStart < hostConfig.SustainedTimePeriod*1000000000 && timeSincePeriodStart >= 0
+	return timeSincePeriodStart < hostConfig.SustainedTimePeriod*1000 && timeSincePeriodStart >= 0
 }
 
 //isInBurstPeriod checks if the current request is in the burst period
 func (h *RequestsStatus) isInBurstPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
 	timeSincePeriodStart := currentTime - h.getFirstBurstRequest()
 	//								converts seconds to milliseconds
-	return timeSincePeriodStart < hostConfig.BurstTimePeriod*1000000000 && timeSincePeriodStart >= 0
+	return timeSincePeriodStart < hostConfig.BurstTimePeriod*1000 && timeSincePeriodStart >= 0
 }
 
 //willHitSustainedLimit checks if the current request will hit the sustained rate limit
@@ -318,7 +318,7 @@ func (h *RequestsStatus) willHitBurstLimit(requestWeight int, host RateLimitConf
 //timeUntilEndOfSustained calculates the time in milliseconds until the end of the sustained period
 func (h *RequestsStatus) timeUntilEndOfSustained(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
 	// 											converts from seconds to milliseconds
-	endOfPeriod := h.getFirstSustainedRequest() + (host.SustainedTimePeriod * 1000000000)
+	endOfPeriod := h.getFirstSustainedRequest() + (host.SustainedTimePeriod * 1000)
 
 	return endOfPeriod - currentTime
 }
@@ -326,14 +326,14 @@ func (h *RequestsStatus) timeUntilEndOfSustained(currentTime int64, host RateLim
 //timeUntilEndOfBurst calculates the time in milliseconds until the end of the burst period
 func (h *RequestsStatus) timeUntilEndOfBurst(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
 	//  								converts from seconds to milliseconds
-	endOfPeriod := h.getFirstBurstRequest() + (host.BurstTimePeriod * 1000000000)
+	endOfPeriod := h.getFirstBurstRequest() + (host.BurstTimePeriod * 1000)
 
 	return endOfPeriod - currentTime
 }
 
 //GetUnixTimeMilliseconds returns the current UTC time in milliseconds
 func GetUnixTimeMilliseconds() int64 {
-	return time.Now().UTC().UnixNano() /// int64(time.Millisecond)
+	return time.Now().UTC().UnixNano() / int64(time.Millisecond)
 }
 
 func NewRequestsStatus(host string, sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64) RequestsStatus {
