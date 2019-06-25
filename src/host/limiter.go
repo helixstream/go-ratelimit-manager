@@ -8,7 +8,7 @@ import (
 //Limiter counts the number of requests made and keeps the number of
 //requests under the sustained and burst limits specified by the user
 type Limiter struct {
-	status requestsStatus
+	status RequestsStatus
 	config RateLimitConfig
 	pool   *radix.Pool
 }
@@ -221,6 +221,10 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 		return false, 0
 	}
 	return canMake, wait
+}
+
+func (l *Limiter) GetStatus() RequestsStatus {
+	return l.status
 }
 
 func (l *Limiter) getStatusKey() string {

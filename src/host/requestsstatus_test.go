@@ -15,8 +15,8 @@ func Test_CanMakeRequestLogic(t *testing.T) {
 		name                   string
 		host                   RateLimitConfig
 		requestWeight          int
-		status                 requestsStatus
-		expectedStatus         requestsStatus
+		status                 RequestsStatus
+		expectedStatus         RequestsStatus
 		expectedCanMakeRequest bool
 	}
 	//runs the test 10 times so ensure that firstBurstRequest is always within an acceptable range
@@ -158,7 +158,7 @@ func Test_IsInSustainedPeriod(t *testing.T) {
 
 	type HostStatusTest struct {
 		host     RateLimitConfig
-		status   requestsStatus
+		status   RequestsStatus
 		expected bool
 	}
 
@@ -219,7 +219,7 @@ func Test_IsInBurstPeriod(t *testing.T) {
 
 	type HostStatusTest struct {
 		host     RateLimitConfig
-		status   requestsStatus
+		status   RequestsStatus
 		expected bool
 	}
 
@@ -282,7 +282,7 @@ func Test_WillHitSustainedLimit(t *testing.T) {
 	type TestHostStatus struct {
 		host     RateLimitConfig
 		weight   int
-		status   requestsStatus
+		status   RequestsStatus
 		expected bool
 	}
 
@@ -343,7 +343,7 @@ func Test_WillHitBurstLimit(t *testing.T) {
 	type TestHostStatus struct {
 		host     RateLimitConfig
 		weight   int
-		status   requestsStatus
+		status   RequestsStatus
 		expected bool
 	}
 

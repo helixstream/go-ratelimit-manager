@@ -8,7 +8,7 @@ import (
 )
 
 //requestsStatus struct contains all info pertaining to the cumulative requests made to a specific host
-type requestsStatus struct {
+type RequestsStatus struct {
 	sustainedRequests     int   //total number of completed requests made during the current sustained period
 	burstRequests         int   //total number of completed requests made during the current burst period
 	pendingRequests       int   //number of requests that have started but have not completed
@@ -29,7 +29,7 @@ const (
 //example: config:com.binance.api
 
 //updateStatusFromDatabase gets the current request status information from the database and updates the struct
-func (r *requestsStatus) updateStatusFromDatabase(c radix.Conn, key string) error {
+func (r *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) error {
 	var values []string
 	err := c.Do(radix.Cmd(&values, "HVALS", key))
 	if err != nil {
@@ -55,7 +55,7 @@ func (r *requestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 //canMakeRequestLogic checks to see if a request can be made
 //returns true, 0 if request can be made
 //returns false and the number of milliseconds to wait if a request cannot be made
-func (r *requestsStatus) canMakeRequestLogic(requestWeight int, config RateLimitConfig) (bool, int64) {
+func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimitConfig) (bool, int64) {
 	now := getUnixTimeMilliseconds()
 	//if request is in the current burst period
 	if r.isInBurstPeriod(now, config) {
@@ -109,14 +109,14 @@ func (r *requestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 }
 
 //isInSustainedPeriod checks if the current request is in the sustained period
-func (r *requestsStatus) isInSustainedPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
+func (r *RequestsStatus) isInSustainedPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
 	timeSincePeriodStart := currentTime - r.firstSustainedRequest
 	//								converts seconds to milliseconds
 	return timeSincePeriodStart < hostConfig.sustainedTimePeriod*1000 && timeSincePeriodStart >= 0
 }
 
 //isInBurstPeriod checks if the current request is in the burst period
-func (r *requestsStatus) isInBurstPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
+func (r *RequestsStatus) isInBurstPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
 	timeSincePeriodStart := currentTime - r.firstBurstRequest
 	//								converts seconds to milliseconds
 	return timeSincePeriodStart < hostConfig.burstTimePeriod*1000 && timeSincePeriodStart >= 0
@@ -125,7 +125,7 @@ func (r *requestsStatus) isInBurstPeriod(currentTime int64, hostConfig RateLimit
 //willHitSustainedLimit checks if the current request will hit the sustained rate limit
 //if the total number of requests plus the weight of the requested request is greater than the limit
 //than the requested request should not occur because it would cause us to go over the limit
-func (r *requestsStatus) willHitSustainedLimit(requestWeight int, host RateLimitConfig) bool {
+func (r *RequestsStatus) willHitSustainedLimit(requestWeight int, host RateLimitConfig) bool {
 	totalRequests := r.sustainedRequests + r.pendingRequests
 
 	return totalRequests+requestWeight > host.sustainedRequestLimit
@@ -134,14 +134,14 @@ func (r *requestsStatus) willHitSustainedLimit(requestWeight int, host RateLimit
 //willHitBurstLimit checks if the current request will hit the burst rate limit
 //if the total number of requests plus the weight of the requested request is greater than the limit
 //than the requested request should not occur because it would cause us to go over the limit
-func (r *requestsStatus) willHitBurstLimit(requestWeight int, host RateLimitConfig) bool {
+func (r *RequestsStatus) willHitBurstLimit(requestWeight int, host RateLimitConfig) bool {
 	totalRequests := r.burstRequests + r.pendingRequests
 
 	return totalRequests+requestWeight > host.burstRequestLimit
 }
 
 //timeUntilEndOfSustained calculates the time in milliseconds until the end of the sustained period
-func (r *requestsStatus) timeUntilEndOfSustained(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
+func (r *RequestsStatus) timeUntilEndOfSustained(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
 	// 											converts from seconds to milliseconds
 	endOfPeriod := r.firstSustainedRequest + (host.sustainedTimePeriod * 1000)
 
@@ -149,7 +149,7 @@ func (r *requestsStatus) timeUntilEndOfSustained(currentTime int64, host RateLim
 }
 
 //timeUntilEndOfBurst calculates the time in milliseconds until the end of the burst period
-func (r *requestsStatus) timeUntilEndOfBurst(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
+func (r *RequestsStatus) timeUntilEndOfBurst(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
 	//  								converts from seconds to milliseconds
 	endOfPeriod := r.firstBurstRequest + (host.burstTimePeriod * 1000)
 
@@ -161,38 +161,38 @@ func getUnixTimeMilliseconds() int64 {
 	return time.Now().UTC().UnixNano() / int64(time.Millisecond)
 }
 
-func newRequestsStatus(sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64) requestsStatus {
-	return requestsStatus{sustainedRequests, burstRequests, pending, firstSustainedRequests, firstBurstRequest}
+func newRequestsStatus(sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64) RequestsStatus {
+	return RequestsStatus{sustainedRequests, burstRequests, pending, firstSustainedRequests, firstBurstRequest}
 }
 
-func (r *requestsStatus) incrementSustainedRequests(increment int) {
+func (r *RequestsStatus) incrementSustainedRequests(increment int) {
 	r.sustainedRequests += increment
 }
 
-func (r *requestsStatus) setSustainedRequests(value int) {
+func (r *RequestsStatus) setSustainedRequests(value int) {
 	r.sustainedRequests = value
 }
 
-func (r *requestsStatus) incrementBurstRequests(increment int) {
+func (r *RequestsStatus) incrementBurstRequests(increment int) {
 	r.burstRequests += increment
 }
 
-func (r *requestsStatus) setBurstRequests(value int) {
+func (r *RequestsStatus) setBurstRequests(value int) {
 	r.burstRequests = value
 }
 
-func (r *requestsStatus) incrementPendingRequests(increment int) {
+func (r *RequestsStatus) incrementPendingRequests(increment int) {
 	r.pendingRequests += increment
 }
 
-func (r *requestsStatus) decrementPendingRequests(increment int) {
+func (r *RequestsStatus) decrementPendingRequests(increment int) {
 	r.pendingRequests -= increment
 }
 
-func (r *requestsStatus) setFirstSustainedRequest(value int64) {
+func (r *RequestsStatus) setFirstSustainedRequest(value int64) {
 	r.firstSustainedRequest = value
 }
 
-func (r *requestsStatus) setFirstBurstRequest(value int64) {
+func (r *RequestsStatus) setFirstBurstRequest(value int64) {
 	r.firstBurstRequest = value
 }

@@ -68,7 +68,6 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
 		canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
 
 		if canMake {
-			//fmt.Printf("Can Make: %v \n", limiter.status)
 			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
 			if err != nil {
 				t.Errorf("Error on getting Status Code: %v. ", err)
@@ -117,7 +116,7 @@ func Test_RequestCancelled(t *testing.T) {
 	type TestRequestStatus struct {
 		requestWeight int
 		limiter       Limiter
-		expected      requestsStatus
+		expected      RequestsStatus
 	}
 
 	config := NewRateLimitConfig("testHost", 0, 0, 0, 0)
@@ -186,7 +185,7 @@ func Test_RequestFinished(t *testing.T) {
 	type TestRequestStatus struct {
 		requestWeight int
 		limiter       Limiter
-		expected      requestsStatus
+		expected      RequestsStatus
 	}
 
 	config := NewRateLimitConfig("testHost", 0, 0, 0, 0)
