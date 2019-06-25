@@ -192,7 +192,7 @@ func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config
 	}))
 	if err != nil {
 		fmt.Printf("Error: %v. ", err)
-		return false, 0
+		return false, 500
 	}
 	//resp is the response to the EXEC command
 	//if resp is nil the transaction was aborted

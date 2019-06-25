@@ -35,7 +35,7 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 200
+	numOfRoutines := 500
 
 	server := getServer()
 
@@ -66,11 +66,11 @@ func Test_CanMakeRequest(t *testing.T) {
 func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
 	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
 
-	numOfRequests := rand.Intn(10) + 1
+	numOfRequests := rand.Intn(2) + 1
 
 	for numOfRequests > 0 {
 
-		requestWeight := rand.Intn(4) + 1
+		requestWeight := rand.Intn(2) + 1
 
 		canMake, sleepTime := requestStatus.CanMakeRequest(pool, requestWeight, hostConfig)
 

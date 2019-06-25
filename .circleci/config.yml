@@ -8,6 +8,9 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Over Commit Memory
+          command: sysctl vm.overcommit_memory=1
+      - run:
           name: Go Get
           command: go get -v -t -d ./...
       - run:
