@@ -35,7 +35,7 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 500
+	numOfRoutines := 1000
 
 	server := getServer()
 
@@ -75,7 +75,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 		canMake, sleepTime := requestStatus.CanMakeRequest(pool, requestWeight, hostConfig)
 
 		if canMake {
-			fmt.Printf(" %v %v %v \n", id, requestWeight, requestStatus)
+			//fmt.Printf("Can Make: %v \n", requestStatus)
 			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
 			if err != nil {
 				t.Errorf("Error on getting Status Code: %v. ", err)
@@ -100,7 +100,7 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 			}
 
 		} else {
-			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+			time.Sleep(time.Duration(sleepTime) * time.Nanosecond)
 		}
 	}
 

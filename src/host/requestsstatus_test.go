@@ -1,10 +1,6 @@
 package host
 
-import (
-	"github.com/go-test/deep"
-	"testing"
-)
-
+/*
 func Test_CanMakeRequestLogic(t *testing.T) {
 	hosts := []RateLimitConfig{
 		NewRateLimitConfig("test_host_1", 1200, 60, 20, 1),
@@ -393,3 +389,6 @@ func Test_WillHitBurstLimit(t *testing.T) {
 		}
 	}
 }
+
+
+ */
