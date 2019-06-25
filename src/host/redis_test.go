@@ -89,13 +89,13 @@ func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- str
 				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
 					t.Errorf("Error on Request Finished: %v. \n", err)
 				}
-				fmt.Printf("Routine: %v. %v. %v, \n", id, statusCode, requestStatus)
-				t.Errorf("Routine: %v. %v. %t. %d. \n", id, statusCode, canMake, sleepTime)
+				fmt.Printf("Routine: %v. %v. %v. %v, \n", id, requestWeight, statusCode, requestStatus)
+				t.Errorf("Routine: %v. %v. %v. %t. %d. \n", id, requestWeight, statusCode, canMake, sleepTime)
 			}
 
 		} else {
 			if sleepTime > 0 {
-				fmt.Printf("Sleep: %d \n", sleepTime)
+				// fmt.Printf("Sleep: %d \n", sleepTime)
 				time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 			}
 		}
