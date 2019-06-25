@@ -1,26 +1,122 @@
 package host
 
 import (
+	"context"
+	"fmt"
 	"github.com/go-test/deep"
-	"github.com/gomodule/redigo/redis"
-	"log"
+	"github.com/mediocregopher/radix"
 	"math/rand"
+	"net/http"
+	url2 "net/url"
+	"strconv"
 	"testing"
 	"time"
 )
 
 //pool of connections to redis database
-var pool = &redis.Pool{
-	MaxIdle:   80,
-	MaxActive: 12000,
-	Dial: func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", ":6379")
-		if err != nil {
-			panic(err.Error())
+var pool, err = radix.NewPool("tcp", "127.0.0.1:6379", 500)
+
+func Test_CanMakeRequest(t *testing.T) {
+	//handles creating new pool error
+	if err != nil {
+		panic(err)
+	}
+
+	err = pool.Do(radix.FlatCmd(nil, "HSET",
+		"status:"+serverConfig.Host,
+		host, serverConfig.Host,
+		sustainedRequests, 0,
+		burstRequests, 0,
+		pendingRequests, 0,
+		firstSustainedRequest, 0,
+		firstBurstRequest, 0,
+	))
+
+	rand.Seed(time.Now().Unix())
+	channel := make(chan string)
+
+	numOfRoutines := 500
+
+	server := getServer()
+
+	fmt.Print("testing concurrent requests ")
+
+	testConfig := NewRateLimitConfig(serverConfig.Host,
+		serverConfig.SustainedRequestLimit-1,
+		serverConfig.SustainedTimePeriod,
+		serverConfig.BurstRequestLimit-1,
+		serverConfig.BurstTimePeriod)
+
+	for i := 0; i < numOfRoutines; i++ {
+		//ServerConfig is a global variable declared in server.go
+		go makeRequests(t, testConfig, i, channel)
+	}
+
+	for i := 0; i < numOfRoutines; i++ {
+		<-channel
+	}
+
+	if err := server.Shutdown(context.TODO()); err != nil {
+		panic(err)
+	}
+
+	fmt.Print("done")
+}
+
+func makeRequests(t *testing.T, hostConfig RateLimitConfig, id int, c chan<- string) {
+	requestStatus := NewRequestsStatus(hostConfig.Host, 0, 0, 0, 0, 0)
+
+	numOfRequests := rand.Intn(3) + 1
+
+	for numOfRequests > 0 {
+
+		requestWeight := rand.Intn(2) + 1
+
+		canMake, sleepTime := requestStatus.CanMakeRequest(pool, requestWeight, hostConfig)
+
+		if canMake {
+			//fmt.Printf("Can Make: %v \n", requestStatus)
+			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
+			if err != nil {
+				t.Errorf("Error on getting Status Code: %v. ", err)
+			}
+
+			if statusCode == 500 {
+				if err := requestStatus.RequestCancelled(requestWeight, pool); err != nil {
+					t.Errorf("Error on Request Cancelled: %v. ", err)
+				}
+
+			} else if statusCode == 200 {
+				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
+					t.Errorf("Error on Request Finished: %v. ", err)
+				}
+				numOfRequests -= requestWeight
+			} else {
+				if err := requestStatus.RequestFinished(requestWeight, pool); err != nil {
+					t.Errorf("Error on Request Finished: %v. ", err)
+				}
+				fmt.Printf("Routine: %v. %v. %v, ", id, statusCode, requestStatus)
+				t.Errorf("Routine: %v. %v. ", id, statusCode)
+			}
+
+		} else if sleepTime != 0 {
+			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
-		return c, err
-	},
-	IdleTimeout: 240 * time.Second,
+	}
+
+	fmt.Print(".")
+	c <- "done"
+}
+
+func getStatusCode(url string, weight int) (int, error) {
+	resp, err := http.PostForm(url, url2.Values{"weight": {strconv.Itoa(weight)}})
+	if err != nil {
+		return 0, err
+	} else if resp != nil {
+		return resp.StatusCode, resp.Body.Close()
+	}
+
+	return 0, nil
 }
 
 func Test_PING(t *testing.T) {
@@ -31,82 +127,181 @@ func Test_PING(t *testing.T) {
 	}
 }
 
-func Test_DoesKeyExist(t *testing.T) {
+func Test_RequestCancelled(t *testing.T) {
+
+	key := "status:" + "testHost"
 
 	type TestRequestStatus struct {
-		status   RequestsStatus
-		expected bool
+		requestWeight int
+		status        RequestsStatus
+		expected      RequestsStatus
 	}
 
 	testCases := []TestRequestStatus{
 		{
-			NewRequestsStatus("testHost1", 0, 0, 0, 0, 0),
-			false,
+			2,
+			NewRequestsStatus("testHost", 0, 0, 10, 0, 0),
+			NewRequestsStatus("testHost", 0, 0, 8, 0, 0),
 		},
 		{
-			NewRequestsStatus("testHost2", 0, 0, 0, 0, 0),
-			true,
+			1,
+			NewRequestsStatus("testHost", 0, 0, 3, 0, 0),
+			NewRequestsStatus("testHost", 0, 0, 2, 0, 0),
 		},
-	}
-
-	c := pool.Get()
-
-	_, err := c.Do("SET", "status:testHost2", "value")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = c.Close()
-	if err != nil {
-		log.Fatal(err)
+		{
+			5,
+			NewRequestsStatus("testHost", 0, 0, 10, 0, 0),
+			NewRequestsStatus("testHost", 0, 0, 5, 0, 0),
+		},
 	}
 
 	for i := 0; i < len(testCases); i++ {
-		result := testCases[i].status.DoesKeyExist(pool)
+		s := testCases[i].status
 
-		if result != testCases[i].expected {
-			t.Errorf("Loop: %v. Expected key to exist: %v, got: %v. ", i, testCases[i].expected, result)
+		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
+			err = pool.Do(radix.FlatCmd(nil, "HSET",
+				key,
+				host, s.Host,
+				sustainedRequests, s.SustainedRequests,
+				burstRequests, s.BurstRequests,
+				pendingRequests, s.PendingRequests,
+				firstSustainedRequest, s.FirstSustainedRequest,
+				firstBurstRequest, s.FirstBurstRequest,
+			))
+			if err != nil {
+				return err
+			}
+
+			if err := s.RequestCancelled(testCases[i].requestWeight, pool); err != nil {
+				t.Error(err)
+			}
+
+			err = s.updateStatusFromDatabase(c, key)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}))
+
+		if err != nil {
+			t.Error(err)
+		}
+
+		if diff := deep.Equal(s, testCases[i].expected); diff != nil {
+			t.Errorf("Loop: %v. %v. ", i, diff)
+		}
+	}
+
+}
+
+func Test_RequestFinished(t *testing.T) {
+	key := "status:" + "testHost"
+
+	type TestRequestStatus struct {
+		requestWeight int
+		status        RequestsStatus
+		expected      RequestsStatus
+	}
+
+	testCases := []TestRequestStatus{
+		{
+			2,
+			NewRequestsStatus("testHost", 5, 2, 10, 0, 0),
+			NewRequestsStatus("testHost", 7, 4, 8, 0, 0),
+		},
+		{
+			1,
+			NewRequestsStatus("testHost", 0, 40, 3, 0, 0),
+			NewRequestsStatus("testHost", 1, 41, 2, 0, 0),
+		},
+		{
+			5,
+			NewRequestsStatus("testHost", 35, 0, 10, 0, 0),
+			NewRequestsStatus("testHost", 40, 5, 5, 0, 0),
+		},
+	}
+
+	for i := 0; i < len(testCases); i++ {
+		s := testCases[i].status
+
+		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
+			err = pool.Do(radix.FlatCmd(nil, "HSET",
+				key,
+				host, s.Host,
+				sustainedRequests, s.SustainedRequests,
+				burstRequests, s.BurstRequests,
+				pendingRequests, s.PendingRequests,
+				firstSustainedRequest, s.FirstSustainedRequest,
+				firstBurstRequest, s.FirstBurstRequest,
+			))
+			if err != nil {
+				return err
+			}
+
+			if err := s.RequestFinished(testCases[i].requestWeight, pool); err != nil {
+				t.Error(err)
+			}
+
+			err = s.updateStatusFromDatabase(c, key)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}))
+
+		if err != nil {
+			t.Error(err)
+		}
+
+		if diff := deep.Equal(s, testCases[i].expected); diff != nil {
+			t.Errorf("Loop: %v. %v. ", i, diff)
 		}
 	}
 }
 
-func Test_SaveGetStatus(t *testing.T) {
+func Test_updateStatusFromDatabase(t *testing.T) {
 
-	type TestRequestStatus struct {
-		host   string
-		status RequestsStatus
-	}
+	key := "status:" + "testHost"
 
-	rand.Seed(time.Now().UnixNano())
-
-	min := 1
-	max := 200
-
-	testCases := []TestRequestStatus{
-		{
-			"testHost4",
-			NewRequestsStatus("testHost4", rand.Intn(max-min)+min, rand.Intn(max-min)+min, rand.Intn(max-min)+min, 40, 50),
-		},
-		{
-			"testHost5",
-			NewRequestsStatus("testHost5", rand.Intn(max-min)+min, rand.Intn(max-min)+min, rand.Intn(max-min)+min, 0, 90),
-		},
-		{
-			"testHost6",
-			NewRequestsStatus("testHost6", rand.Intn(max-min)+min, rand.Intn(max-min)+min, rand.Intn(max-min)+min, 450, 0),
-		},
+	testCases := []RequestsStatus{
+		NewRequestsStatus("testHost", 5, 2, 10, 2126523, 2343),
+		NewRequestsStatus("testHost", 0, 40, 3, 236436, 0),
+		NewRequestsStatus("testHost", 35, 0, 10, 0, 9545456),
 	}
 
 	for i := 0; i < len(testCases); i++ {
-		testCases[i].status.SaveStatus(pool)
+		s := testCases[i]
+		newStatus := NewRequestsStatus("testHost", 0, 0, 0, 0, 0)
 
-		newStatus := NewRequestsStatus(testCases[i].host, 0, 0, 0, 0, 0)
+		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
+			err = c.Do(radix.FlatCmd(nil, "HSET",
+				key,
+				host, s.Host,
+				sustainedRequests, s.SustainedRequests,
+				burstRequests, s.BurstRequests,
+				pendingRequests, s.PendingRequests,
+				firstSustainedRequest, s.FirstSustainedRequest,
+				firstBurstRequest, s.FirstBurstRequest,
+			))
+			if err != nil {
+				return err
+			}
 
-		newStatus.GetStatus(pool)
+			err = newStatus.updateStatusFromDatabase(c, key)
+			if err != nil {
+				return err
+			}
 
-		if diff := deep.Equal(testCases[i].status, newStatus); diff != nil {
-			t.Errorf("Loop: %v. %v", i, diff)
+			return nil
+		}))
+		if err != nil {
+			t.Error(err)
+		}
+
+		if diff := deep.Equal(s, newStatus); diff != nil {
+			t.Errorf("Loop: %v. %v. ", i, diff)
 		}
 	}
-
 }

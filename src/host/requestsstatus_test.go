@@ -5,109 +5,7 @@ import (
 	"testing"
 )
 
-func Test_CheckRequest(t *testing.T) {
-	hosts := []RateLimitConfig{
-		NewRateLimitConfig("test_host_1", 1200, 60, 20, 1),
-		NewRateLimitConfig("test_host_2", 600, 60, 20, 1),
-	}
-
-	type HostStatusTest struct {
-		name          string
-		host          RateLimitConfig
-		requestWeight int
-		status        RequestsStatus
-	}
-
-	now := GetUnixTimeMilliseconds()
-
-	testCases := []HostStatusTest{
-		{
-			"not in sustained, not in burst",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 500, 500, 0, now-(hosts[0].SustainedTimePeriod*1000)-5, now-(hosts[0].BurstTimePeriod*1000)-1),
-		},
-		{
-			"not in sustained, not in burst",
-			hosts[1],
-			5,
-			NewRequestsStatus("test_host", 500, 500, 0, now-(hosts[0].SustainedTimePeriod*1000)-5, now-(hosts[0].BurstTimePeriod*1000)-1),
-		},
-		{
-			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 500, 500, 20, now, now-(hosts[0].BurstTimePeriod*1000)),
-		},
-		{
-			"is in sustained, not in burst, no sustained limit, burst limit does not matter",
-			hosts[1],
-			3,
-			NewRequestsStatus("test_host", 500, 10, 20, now-3000, now-(hosts[0].BurstTimePeriod*1000)),
-		},
-		{
-			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1195, 5, 5, now-(hosts[0].SustainedTimePeriod*1000)+2000, now-(hosts[0].BurstTimePeriod*1000)-1000),
-		},
-		{
-			"is in sustained, not in burst, will hit sustained limit, burst limit does not matter",
-			hosts[1],
-			5,
-			NewRequestsStatus("test_host", 597, 5, 5, now-(hosts[0].SustainedTimePeriod*1000)+7000, now-(hosts[0].BurstTimePeriod*1000)-100),
-		},
-		{
-			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1000, 18, 2, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
-		},
-		{
-			"is in sustained, is in burst, will hit burst limit, sustained limit does not matter",
-			hosts[1],
-			5,
-			NewRequestsStatus("test_host", 1000, 15, 1, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
-		},
-		{
-			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod*1000)+100, now),
-		},
-		{
-			"is in sustained, is in burst, will hit sustained limit, will not hit burst limit",
-			hosts[1],
-			1,
-			NewRequestsStatus("test_host", 1195, 8, 6, now-(hosts[0].SustainedTimePeriod*1000)+1000, now),
-		},
-		{
-			"is in sustained, is in burst, will not hit either limit",
-			hosts[0],
-			1,
-			NewRequestsStatus("test_host", 1000, 10, 4, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
-		},
-		{
-			"is in sustained, is in burst, will not hit either limit",
-			hosts[1],
-			3,
-			NewRequestsStatus("test_host", 400, 10, 4, now-((hosts[0].SustainedTimePeriod*1000)/2), now),
-		},
-	}
-
-	for i := 0; i < len(testCases); i++ {
-		t.Run(testCases[i].name, func(t *testing.T) {
-			canMake := testCases[i].status.CheckRequest(testCases[i].requestWeight, testCases[i].host)
-
-			if !canMake {
-				t.Errorf("Loop: %v. Expected true for CheckRequest, got: %v. Subname: %v", i, canMake, testCases[i].name)
-			}
-		})
-
-	}
-}
-
-func Test_CanMakeRequest(t *testing.T) {
+func Test_CanMakeRequestLogic(t *testing.T) {
 	hosts := []RateLimitConfig{
 		NewRateLimitConfig("test_host_1", 1200, 60, 20, 1),
 		NewRateLimitConfig("test_host_2", 600, 60, 20, 1),
@@ -227,109 +125,26 @@ func Test_CanMakeRequest(t *testing.T) {
 
 		for i := 0; i < len(testCases); i++ {
 			t.Run(testCases[i].name, func(t *testing.T) {
-				canMake, _ := testCases[i].status.CanMakeRequest(testCases[i].requestWeight, testCases[i].host)
+
+				status := testCases[i].status
+				expected := testCases[i].expectedStatus
+				canMake, _ := status.canMakeRequestLogic(testCases[i].requestWeight, testCases[i].host)
 
 				if canMake != testCases[i].expectedCanMakeRequest {
 					//error if the boolean the function returns does not match the expected value
 					t.Errorf("Loop: %v. Expected ability to make request: %v, got: %v", i, testCases[i].expectedCanMakeRequest, canMake)
 				}
-				if diff := deep.Equal(testCases[i].status, testCases[i].expectedStatus); diff != nil {
-					//because firstBurstRequest is a millisecond timestamp, it is too small of a unit to predict exactly
-					//this line makes sure that firstBurstRequest is within a range of 20ms
-					if Abs(testCases[i].status.FirstBurstRequest-testCases[i].expectedStatus.FirstBurstRequest) > 10 {
+
+				if diff := deep.Equal(status, expected); diff != nil {
+					//because firstBurstRequest and firstSustainedRequest are millisecond timestamps, they are too small of a unit to predict exactly
+					//this line makes sure that firstBurstRequest and firstSustainedRequest is within a range of 20ms
+					if status.FirstBurstRequest-expected.FirstBurstRequest > 20 && status.FirstSustainedRequest-expected.FirstSustainedRequest > 20 {
 						t.Errorf("Loop: %v. %v", i, diff)
 					}
 				}
 
 			})
 
-		}
-	}
-}
-
-func Abs(x int64) int64 {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
-func Test_RequestFinished(t *testing.T) {
-
-	type TestRequestsStatus struct {
-		requestWeight int
-		status        RequestsStatus
-		expected      RequestsStatus
-	}
-
-	testCases := []TestRequestsStatus{
-		{
-			1,
-			NewRequestsStatus("testhost", 0, 0, 5, 0, 0),
-			NewRequestsStatus("testhost", 1, 1, 4, 0, 0),
-		},
-		{
-			3,
-			NewRequestsStatus("testhost", 35, 2, 19, 0, 0),
-			NewRequestsStatus("testhost", 38, 5, 16, 0, 0),
-		},
-		{
-			2,
-			NewRequestsStatus("testhost", 10, 5, 1, 0, 0),
-			NewRequestsStatus("testhost", 10, 5, 1, 0, 0),
-		},
-		{
-			2,
-			NewRequestsStatus("testhost", 10, 5, 2, 0, 0),
-			NewRequestsStatus("testhost", 12, 7, 0, 0, 0),
-		},
-	}
-
-	for i := 0; i < len(testCases); i++ {
-		testCases[i].status.RequestFinished(testCases[i].requestWeight)
-
-		if diff := deep.Equal(testCases[i].status, testCases[i].expected); diff != nil {
-			t.Errorf("Loop: %v. %v. ", i, diff)
-		}
-	}
-
-}
-
-func Test_RequestCancelled(t *testing.T) {
-	type TestRequestsStatus struct {
-		requestWeight int
-		status        RequestsStatus
-		expected      RequestsStatus
-	}
-
-	testCases := []TestRequestsStatus{
-		{
-			1,
-			NewRequestsStatus("testhost", 0, 0, 5, 0, 0),
-			NewRequestsStatus("testhost", 0, 0, 4, 0, 0),
-		},
-		{
-			3,
-			NewRequestsStatus("testhost", 35, 2, 19, 0, 0),
-			NewRequestsStatus("testhost", 35, 2, 16, 0, 0),
-		},
-		{
-			2,
-			NewRequestsStatus("testhost", 10, 5, 1, 0, 0),
-			NewRequestsStatus("testhost", 10, 5, 1, 0, 0),
-		},
-		{
-			2,
-			NewRequestsStatus("testhost", 10, 5, 2, 0, 0),
-			NewRequestsStatus("testhost", 10, 5, 0, 0, 0),
-		},
-	}
-
-	for i := 0; i < len(testCases); i++ {
-		testCases[i].status.RequestCancelled(testCases[i].requestWeight)
-
-		if diff := deep.Equal(testCases[i].status, testCases[i].expected); diff != nil {
-			t.Errorf("Loop: %v. %v. ", i, diff)
 		}
 	}
 }

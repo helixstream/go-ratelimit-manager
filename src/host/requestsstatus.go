@@ -1,10 +1,9 @@
 package host
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/gomodule/redigo/redis"
-	"github.com/youtube/vitess/go/vt/log"
+	"github.com/mediocregopher/radix"
+	"strconv"
 	"time"
 )
 
@@ -18,137 +17,232 @@ type RequestsStatus struct {
 	FirstBurstRequest     int64 //timestamp in milliseconds that represents when the burst period began
 }
 
+const (
+	host                  = "host"
+	sustainedRequests     = "sustainedRequests"
+	burstRequests         = "burstRequests"
+	pendingRequests       = "pendingRequests"
+	firstSustainedRequest = "firstSustainedRequest"
+	firstBurstRequest     = "firstBurstRequest"
+)
+
 //key convention redis: struct:host
 //example: status:com.binance.api
 //example: config:com.binance.api
 
-//DoesKeyExist checks the database to see if a non nil value is
-//stored at the specific RequestStatus key
-func (h *RequestsStatus) DoesKeyExist(p *redis.Pool) bool {
-	c := p.Get()
-
-	resp, err := c.Do("GET", "status:"+h.Host)
+//isConnectedToRedis pings the redis database and returns
+//whether the ping was successful
+func isConnectedToRedis(p *radix.Pool) bool {
+	var resp string
+	err := p.Do(radix.Cmd(&resp, "PING"))
 	if err != nil {
-		log.Fatal(err)
+		return false
 	}
-	//converts resp to a string
-	stringResp, err := redis.String(resp, err)
-	if stringResp != "" {
-		return true
-	}
-
-	return false
+	return true
 }
 
-//SaveStatus saves the values of the RequestStatus struct to
-//the redis database
-func (h *RequestsStatus) SaveStatus(p *redis.Pool) {
-	c := p.Get()
-	json, err := h.ConvertToJSON()
+//RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
+//should be called directly after the request has finished
+func (h *RequestsStatus) RequestFinished(requestWeight int, p *radix.Pool) error {
+	key := "status:" + h.Host
+	//this is radix's way of doing a transaction
+	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
+		//start of transaction
+		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
+			return err
+		}
+		// If any of the calls after the MULTI call error it's important that
+		// the transaction is discarded. This isn't strictly necessary if the
+		// error was a network error, as the connection would be closed by the
+		// client anyway, but it's important otherwise.
+		var err error
+		defer func() {
+			if err != nil {
+				// The return from DISCARD doesn't matter. If it's an error then
+				// it's a network error and the Conn will be closed by the
+				// client.
+				c.Do(radix.Cmd(nil, "DISCARD"))
+			}
+		}()
+
+		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, sustainedRequests, requestWeight)); err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, burstRequests, requestWeight)); err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, pendingRequests, -requestWeight)); err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.Cmd(nil, "EXEC")); err != nil {
+			return err
+		}
+
+		return nil
+	}))
+
 	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = c.Do("SET", "status:"+h.Host, json)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = c.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-//GetStatus sets the struct's values to the values in the database
-func (h *RequestsStatus) GetStatus(p *redis.Pool) {
-	c := p.Get()
-
-	resp, err := c.Do("GET", "status:"+h.Host)
-	//converts resp to a slice of bytes
-	bytes, err := redis.Bytes(resp, err)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = h.ConvertFromJSON(bytes)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = c.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-//ConvertToJSON converts the contents of the struct to json and
-//returns a slice of bytes to be saved to the database
-func (h *RequestsStatus) ConvertToJSON() ([]byte, error) {
-	return json.Marshal(h)
-}
-
-//ConvertFromJSON takes a slice of bytes and converts it to JSON
-//and then sets the values of the struct based on that json. Used
-//to update struct data from database
-func (h *RequestsStatus) ConvertFromJSON(data []byte) error {
-	if err := json.Unmarshal(data, &h); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-//isConnectedToRedis pings the redis database and returns
-//whether there is a successful connection
-func isConnectedToRedis(p *redis.Pool) bool {
-	c := p.Get()
-	resp, err := c.Do("PING")
-	pingResp, err := redis.String(resp, err)
+//RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
+//and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
+func (h *RequestsStatus) RequestCancelled(requestWeight int, p *radix.Pool) error {
+	key := "status:" + h.Host
+	//this is radix's way of doing a transaction
+	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
+
+		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
+			return err
+		}
+		// If any of the calls after the MULTI call error it's important that
+		// the transaction is discarded. This isn't strictly necessary if the
+		// error was a network error, as the connection would be closed by the
+		// client anyway, but it's important otherwise.
+		var err error
+		defer func() {
+			if err != nil {
+				// The return from DISCARD doesn't matter. If it's an error then
+				// it's a network error and the Conn will be closed by the
+				// client.
+				c.Do(radix.Cmd(nil, "DISCARD"))
+			}
+		}()
+
+		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, pendingRequests, -requestWeight)); err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.Cmd(nil, "EXEC")); err != nil {
+			return err
+		}
+
+		return nil
+	}))
+
 	if err != nil {
-		fmt.Errorf("%v", err)
+		return err
 	}
 
-	if pingResp != "PONG" {
-		return false
-	}
-
-	return true
+	return nil
 }
 
-//CheckRequest calls CanMakeRequest until a request can be  made
-//returns true when a request can be made
-//if a request cannot be made it waits the correct amount of time and check again to see if a request can be made
-func (h *RequestsStatus) CheckRequest(requestWeight int, host RateLimitConfig) bool {
-	canMake, wait := h.CanMakeRequest(requestWeight, host)
+//CanMakeRequest communicates with the database to figure out when it is possible to make a request
+//returns true, 0 if a request can be made, and false and the amount of time to sleep when a request cannot be made
+func (h *RequestsStatus) CanMakeRequest(p *radix.Pool, requestWeight int, config RateLimitConfig) (bool, int64) {
+	key := "status:" + h.Host
+	var canMake bool
+	var wait int64
+	var resp []string
 
-	if wait != 0 {
-		//sleeps out of burst or sustained period where limit has been reached
-		time.Sleep(time.Duration(wait) * time.Millisecond)
+	err := p.Do(radix.WithConn(key, func(c radix.Conn) error {
+		if err := c.Do(radix.Cmd(nil, "WATCH", key)); err != nil {
+			return err
+		}
 
-		canMake, _ = h.CanMakeRequest(requestWeight, host)
-		return canMake
+		if err := h.updateStatusFromDatabase(c, key); err != nil {
+			return err
+		}
+
+		canMake, wait = h.canMakeRequestLogic(requestWeight, config)
+
+		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
+			return err
+		}
+
+		// If any of the calls after the MULTI call error it's important that
+		// the transaction is discarded. This isn't strictly necessary if the
+		// error was a network error, as the connection would be closed by the
+		// client anyway, but it's important otherwise.
+		var err error
+		defer func() {
+			if err != nil {
+				// The return from DISCARD doesn't matter. If it's an error then
+				// it's a network error and the Conn will be closed by the
+				// client.
+				c.Do(radix.Cmd(nil, "DISCARD"))
+			}
+		}()
+
+		err = c.Do(radix.FlatCmd(nil, "HSET",
+			key,
+			host, h.Host,
+			sustainedRequests, h.SustainedRequests,
+			burstRequests, h.BurstRequests,
+			pendingRequests, h.PendingRequests,
+			firstSustainedRequest, h.FirstSustainedRequest,
+			firstBurstRequest, h.FirstBurstRequest,
+		))
+		if err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.Cmd(&resp, "EXEC")); err != nil {
+			return err
+		}
+
+		return nil
+	}))
+	if err != nil {
+		fmt.Printf("Error: %v. ", err)
+		return false, 0
 	}
-
-	return true
+	//resp is the response to the EXEC command
+	//if resp is nil the transaction was aborted
+	if resp == nil {
+		return false, 0
+	}
+	return canMake, wait
 }
 
-//CanMakeRequest checks to see if a request can be made
+//updateStatusFromDatabase gets the current request status information from the database and updates the struct
+func (h *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) error {
+	var values []string
+	err := c.Do(radix.Cmd(&values, "HVALS", key))
+	if err != nil {
+		fmt.Print(err)
+		return err
+	}
+
+	if len(values) != 6 {
+		*h = NewRequestsStatus(h.Host, 0, 0, 0, 0, 0)
+		return nil
+	}
+
+	host := values[0]
+	sus, _ := strconv.Atoi(values[1])
+	burst, _ := strconv.Atoi(values[2])
+	pending, _ := strconv.Atoi(values[3])
+	firstSus, _ := strconv.ParseInt(values[4], 10, 64)
+	firstBurst, _ := strconv.ParseInt(values[5], 10, 64)
+
+	*h = NewRequestsStatus(host, sus, burst, pending, firstSus, firstBurst)
+	return nil
+}
+
+//canMakeRequestLogic checks to see if a request can be made
 //returns true, 0 if request can be made
 //returns false and the number of milliseconds to wait if a request cannot be made
-func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig) (bool, int64) {
+func (h *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimitConfig) (bool, int64) {
 	now := GetUnixTimeMilliseconds()
 	//if request is in the current burst period
-	if h.isInBurstPeriod(now, host) {
+	if h.isInBurstPeriod(now, config) {
 		//will the request push us over the burst limit
-		if h.willHitBurstLimit(requestWeight, host) {
+		if h.willHitBurstLimit(requestWeight, config) {
 			//is so do not make the request and wait
-			return false, h.timeUntilEndOfBurst(now, host)
+			return false, h.timeUntilEndOfBurst(now, config)
 		}
 
 		//determines if the request will go over the sustained limit
-		if h.willHitSustainedLimit(requestWeight, host) {
+		if h.willHitSustainedLimit(requestWeight, config) {
 			//is so do not make the request and wait
-			return false, h.timeUntilEndOfSustained(now, host)
+			return false, h.timeUntilEndOfSustained(now, config)
 		}
 
 		//did not hit either burst or sustained limit
@@ -159,13 +253,13 @@ func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig)
 		//not in burst period, but in sustained period
 	}
 
-	if h.isInSustainedPeriod(now, host) {
+	if h.isInSustainedPeriod(now, config) {
 		//reset burst to 0 and sets start of new burst period to now
 		h.setBurstRequests(0)
 		h.setFirstBurstRequest(now)
 
-		if h.willHitSustainedLimit(requestWeight, host) {
-			return false, h.timeUntilEndOfSustained(now, host)
+		if h.willHitSustainedLimit(requestWeight, config) {
+			return false, h.timeUntilEndOfSustained(now, config)
 		}
 
 		//can make request because did not hit sustained limit
@@ -186,24 +280,6 @@ func (h *RequestsStatus) CanMakeRequest(requestWeight int, host RateLimitConfig)
 
 	return true, 0
 
-}
-
-//RequestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
-//should be called directly after the request has finished
-func (h *RequestsStatus) RequestFinished(requestWeight int) {
-	if h.getPendingRequests() >= requestWeight {
-		h.decrementPendingRequests(requestWeight)
-		h.incrementSustainedRequests(requestWeight)
-		h.incrementBurstRequests(requestWeight)
-	}
-}
-
-//RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
-//and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
-func (h *RequestsStatus) RequestCancelled(requestWeight int) {
-	if h.getPendingRequests() >= requestWeight {
-		h.decrementPendingRequests(requestWeight)
-	}
 }
 
 //isInSustainedPeriod checks if the current request is in the sustained period
@@ -254,6 +330,7 @@ func (h *RequestsStatus) timeUntilEndOfBurst(currentTime int64, host RateLimitCo
 	return endOfPeriod - currentTime
 }
 
+//GetUnixTimeMilliseconds returns the current UTC time in milliseconds
 func GetUnixTimeMilliseconds() int64 {
 	return time.Now().UTC().UnixNano() / int64(time.Millisecond)
 }
