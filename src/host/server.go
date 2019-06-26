@@ -9,13 +9,13 @@ import (
 )
 
 var (
-	serverConfig = NewRateLimitConfig("transactionTestHost3", 1000, 60, 20, 1)
+	serverConfig = NewRateLimitConfig("transactionTestHost4", 1000, 60, 20, 1)
 
-	sustainedDuration = rate.Limit(float64(serverConfig.SustainedRequestLimit) / float64(serverConfig.SustainedTimePeriod))
-	burstDuration     = rate.Limit(float64(serverConfig.BurstRequestLimit) / float64(serverConfig.BurstTimePeriod))
+	sustainedDuration = rate.Limit(float64(serverConfig.sustainedRequestLimit) / float64(serverConfig.sustainedTimePeriod))
+	burstDuration     = rate.Limit(float64(serverConfig.burstRequestLimit) / float64(serverConfig.burstTimePeriod))
 
-	sustainedLimiter = rate.NewLimiter(sustainedDuration, serverConfig.SustainedRequestLimit)
-	burstLimiter     = rate.NewLimiter(burstDuration, serverConfig.BurstRequestLimit)
+	sustainedLimiter = rate.NewLimiter(sustainedDuration, serverConfig.sustainedRequestLimit)
+	burstLimiter     = rate.NewLimiter(burstDuration, serverConfig.burstRequestLimit)
 	bannedLimiter    = rate.NewLimiter(.1666666, 10)
 
 	port = "8090"
