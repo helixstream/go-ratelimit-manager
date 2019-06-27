@@ -1,5 +1,7 @@
 package host
 
+import "fmt"
+
 //RateLimitConfig struct contains the rate limit information for a specific host
 type RateLimitConfig struct {
 	host                  string //may change to different data type later
@@ -12,7 +14,7 @@ type RateLimitConfig struct {
 
 func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) RateLimitConfig {
 	rl := RateLimitConfig{host, sustainedRequestLimit, sustainedTimePeriod, burstRequestLimit, burstTimePeriod, 0}
-	rl.setTimeBetweenRequests(60)
+	rl.setTimeBetweenRequests(70)
 	return rl
 }
 
@@ -25,7 +27,8 @@ func (rl *RateLimitConfig) setTimeBetweenRequests(percentage int64) {
 	}
 
 	//use sustained limit
-	if rl.burstRequestLimit * int(rl.sustainedTimePeriod) > rl.sustainedRequestLimit {
+	if rl.burstRequestLimit * int(rl.sustainedTimePeriod) > rl.sustainedRequestLimit * int(rl.burstTimePeriod) {
+		fmt.Print(true)
 		//converts to milliseconds
 		time = rl.sustainedTimePeriod * 1000
 		//percentage decrease time period by (9 = 10% decrease, 100 - 90 = 10%)
@@ -33,7 +36,7 @@ func (rl *RateLimitConfig) setTimeBetweenRequests(percentage int64) {
 		time = time/100
 
 		rl.timeBetweenRequests = time/int64(rl.sustainedRequestLimit)
-	} else if rl.burstRequestLimit * int(rl.sustainedTimePeriod) <= rl.sustainedRequestLimit {
+	} else {
 		//converts to milliseconds
 		time = rl.burstTimePeriod * 1000
 		//percentage decrease time period by (9 = 10% decrease, 100 - 90 = 10%)

@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	serverConfig = NewRateLimitConfig("transactionTestHost5", 1200, 60, 30, 1)
+	serverConfig = NewRateLimitConfig("transactionTestHost5", 1800, 60, 30, 1)
 
 	sustainedDuration = rate.Limit(float64(serverConfig.sustainedRequestLimit) / float64(serverConfig.sustainedTimePeriod))
 	burstDuration     = rate.Limit(float64(serverConfig.burstRequestLimit) / float64(serverConfig.burstTimePeriod))

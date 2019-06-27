@@ -213,7 +213,7 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 			sustainedRequests, l.status.sustainedRequests,
 			burstRequests, l.status.burstRequests,
 			pendingRequests, l.status.pendingRequests,
-			firstSustainedRequest, l.status.firstBurstRequest,
+			firstSustainedRequest, l.status.firstSustainedRequest,
 			firstBurstRequest, l.status.firstBurstRequest,
 		))
 		if err != nil {

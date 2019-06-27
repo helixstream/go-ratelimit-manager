@@ -25,7 +25,7 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 1000
+	numOfRoutines := 250
 
 	server := getServer()
 
@@ -53,7 +53,7 @@ func Test_CanMakeRequest(t *testing.T) {
 }
 
 func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
-	numOfRequests := 1//rand.Intn(3) + 1
+	numOfRequests := 4//rand.Intn(3) + 1
 	for numOfRequests > 0 {
 		requestWeight := 1//rand.Intn(2) + 1
 
