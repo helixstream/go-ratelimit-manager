@@ -67,7 +67,7 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
 		canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
 
 		if canMake {
-			fmt.Printf("Can Make: %v, %v, %v \n", id, time.Now().UnixNano() / int64(time.Millisecond), limiter.status)
+			//fmt.Printf("Can Make: %v, %v, %v \n", id, time.Now().UnixNano() / int64(time.Millisecond), limiter.status)
 
 			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
 			if err != nil {
