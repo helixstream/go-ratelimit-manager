@@ -183,6 +183,14 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 
 		canMake, wait = l.status.canMakeRequestLogic(requestWeight, l.config)
 
+		if !canMake {
+			err := c.Do(radix.Cmd(nil, "UNWATCH"))
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+
 		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
 			return err
 		}
@@ -214,7 +222,7 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 			return err
 		}
 
-		if err = c.Do(radix.Cmd(&resp, "EXEC")); err != nil {
+		if err := c.Do(radix.Cmd(&resp, "EXEC")); err != nil {
 			return err
 		}
 

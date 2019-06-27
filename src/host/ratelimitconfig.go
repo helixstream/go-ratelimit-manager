@@ -12,7 +12,7 @@ type RateLimitConfig struct {
 
 func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) RateLimitConfig {
 	rl := RateLimitConfig{host, sustainedRequestLimit, sustainedTimePeriod, burstRequestLimit, burstTimePeriod, 0}
-	rl.setTimeBetweenRequests(70)
+	rl.setTimeBetweenRequests(90)
 	return rl
 }
 

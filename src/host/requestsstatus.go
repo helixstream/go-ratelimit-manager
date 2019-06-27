@@ -88,7 +88,7 @@ func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 	}
 
 	if r.isInSustainedPeriod(now, config) {
-		fmt.Printf("Burst: %v \n", r.pendingRequests + r.burstRequests)
+		//fmt.Printf("Burst: %v \n", r.pendingRequests + r.burstRequests)
 		//reset burst to 0 and sets start of new burst period to now
 		r.setBurstRequests(0)
 		r.setFirstBurstRequest(now)
