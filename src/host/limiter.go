@@ -15,10 +15,17 @@ type Limiter struct {
 
 func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 	limiter := Limiter{
-		newRequestsStatus(0, 0, 0, 0, 0),
+		newRequestsStatus(0, 0, 0, 0, 0, 0),
 		config,
 		pool,
 	}
+
+	config = NewRateLimitConfig(config.host,
+		config.sustainedRequestLimit,
+		config.sustainedTimePeriod,
+		config.burstRequestLimit,
+		config.burstTimePeriod,
+	)
 
 	key := limiter.getStatusKey()
 
@@ -44,6 +51,7 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 			pendingRequests, 0,
 			firstSustainedRequest, 0,
 			firstBurstRequest, 0,
+			lastApprovedRequest, 0,
 		))
 
 		if err != nil {
@@ -200,6 +208,7 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 			pendingRequests, l.status.pendingRequests,
 			firstSustainedRequest, l.status.firstBurstRequest,
 			firstBurstRequest, l.status.firstBurstRequest,
+			lastApprovedRequest, l.status.lastApprovedRequest,
 		))
 		if err != nil {
 			return err

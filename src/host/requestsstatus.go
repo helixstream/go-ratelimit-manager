@@ -14,6 +14,7 @@ type RequestsStatus struct {
 	pendingRequests       int   //number of requests that have started but have not completed
 	firstSustainedRequest int64 //timestamp in milliseconds that represents when the sustained period began
 	firstBurstRequest     int64 //timestamp in milliseconds that represents when the burst period began
+	lastApprovedRequest	int64
 }
 
 const (
@@ -22,6 +23,7 @@ const (
 	pendingRequests       = "pendingRequests"
 	firstSustainedRequest = "firstSustainedRequest"
 	firstBurstRequest     = "firstBurstRequest"
+	lastApprovedRequest = "lastApprovedRequest"
 )
 
 //key convention redis: struct:host
@@ -37,8 +39,8 @@ func (r *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 		return err
 	}
 
-	if len(values) != 5 {
-		*r = newRequestsStatus(0, 0, 0, 0, 0)
+	if len(values) != 6 {
+		*r = newRequestsStatus(0, 0, 0, 0, 0, 0)
 		return nil
 	}
 
@@ -47,8 +49,9 @@ func (r *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 	pending, _ := strconv.Atoi(values[2])
 	firstSus, _ := strconv.ParseInt(values[3], 10, 64)
 	firstBurst, _ := strconv.ParseInt(values[4], 10, 64)
+	lastApproved, _ := strconv.ParseInt(values[5], 10, 64)
 
-	*r = newRequestsStatus(sus, burst, pending, firstSus, firstBurst)
+	*r = newRequestsStatus(sus, burst, pending, firstSus, firstBurst, lastApproved)
 	return nil
 }
 
@@ -71,10 +74,15 @@ func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 			return false, r.timeUntilEndOfSustained(now, config)
 		}
 
-		//did not hit either burst or sustained limit
-		//so can make request and increments pending requests
-		r.incrementPendingRequests(requestWeight)
-		return true, 0
+		if r.hasEnoughTimePassed(now, config) {
+			//did not hit either burst or sustained limit
+			//so can make request and increments pending requests
+			r.incrementPendingRequests(requestWeight)
+			r.lastApprovedRequest = now
+			return true, 0
+		}
+
+		return false, r.timeUntilPeriodBetweenRequestsEnds(now, config)
 
 		//not in burst period, but in sustained period
 	}
@@ -88,9 +96,14 @@ func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 			return false, r.timeUntilEndOfSustained(now, config)
 		}
 
-		//can make request because did not hit sustained limit
-		r.incrementPendingRequests(requestWeight)
-		return true, 0
+		if r.hasEnoughTimePassed(now, config) {
+			//can make request because did not hit sustained limit
+			r.incrementPendingRequests(requestWeight)
+			r.lastApprovedRequest = now
+			return true, 0
+		}
+
+		return false, r.timeUntilPeriodBetweenRequestsEnds(now, config)
 
 	}
 	//out of burst and sustained, able to make request
@@ -104,7 +117,12 @@ func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 	//increment the number of pending requests by the weight of the request
 	r.incrementPendingRequests(requestWeight)
 
-	return true, 0
+	if r.hasEnoughTimePassed(now, config) {
+		r.lastApprovedRequest = now
+		return true, 0
+	}
+
+	return false, r.timeUntilPeriodBetweenRequestsEnds(now, config)
 
 }
 
@@ -156,13 +174,21 @@ func (r *RequestsStatus) timeUntilEndOfBurst(currentTime int64, host RateLimitCo
 	return endOfPeriod - currentTime
 }
 
+func (r *RequestsStatus) hasEnoughTimePassed(currentTime int64, config RateLimitConfig) bool {
+	return currentTime - r.lastApprovedRequest > config.timeBetweenRequests
+}
+
+func (r *RequestsStatus) timeUntilPeriodBetweenRequestsEnds(currentTime int64, config RateLimitConfig) int64{
+	return (r.lastApprovedRequest + config.timeBetweenRequests) - currentTime
+}
+
 //GetUnixTimeMilliseconds returns the current UTC time in milliseconds
 func getUnixTimeMilliseconds() int64 {
 	return time.Now().UTC().UnixNano() / int64(time.Millisecond)
 }
 
-func newRequestsStatus(sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64) RequestsStatus {
-	return RequestsStatus{sustainedRequests, burstRequests, pending, firstSustainedRequests, firstBurstRequest}
+func newRequestsStatus(sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64, lastApprovedRequest int64) RequestsStatus {
+	return RequestsStatus{sustainedRequests, burstRequests, pending, firstSustainedRequests, firstBurstRequest, lastApprovedRequest}
 }
 
 func (r *RequestsStatus) incrementSustainedRequests(increment int) {

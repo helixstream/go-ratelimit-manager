@@ -7,8 +7,39 @@ type RateLimitConfig struct {
 	sustainedTimePeriod   int64  //length of sustained period in seconds
 	burstRequestLimit     int    //the number of requests that can be made during the burst period
 	burstTimePeriod       int64  //length of the burst period in seconds
+	timeBetweenRequests int64
 }
 
 func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) RateLimitConfig {
-	return RateLimitConfig{host, sustainedRequestLimit, sustainedTimePeriod, burstRequestLimit, burstTimePeriod}
+	rl := RateLimitConfig{host, sustainedRequestLimit, sustainedTimePeriod, burstRequestLimit, burstTimePeriod, 0}
+	rl.setTimeBetweenRequests()
+	return rl
+}
+
+func (rl *RateLimitConfig) setTimeBetweenRequests() {
+	//requests per second
+	var time int64
+
+	if rl.sustainedTimePeriod == 0 || rl.burstTimePeriod == 0{
+		return
+	}
+
+	//use sustained limit
+	if rl.burstRequestLimit * int(rl.sustainedTimePeriod) > rl.sustainedRequestLimit {
+		//converts to milliseconds
+		time = rl.sustainedTimePeriod * 1000
+		//percentage decrease time period by (9 = 10% decrease, 100 - 90 = 10%)
+		time *= 8
+		time = time/10
+
+		rl.timeBetweenRequests = time/int64(rl.sustainedRequestLimit)
+	} else if rl.burstRequestLimit * int(rl.sustainedTimePeriod) <= rl.sustainedRequestLimit {
+		//converts to milliseconds
+		time = rl.burstTimePeriod * 1000
+		//percentage decrease time period by (9 = 10% decrease, 100 - 90 = 10%)
+		time *= 8
+		time = time/10
+		rl.timeBetweenRequests = time/int64(rl.burstRequestLimit)
+	}
+
 }
