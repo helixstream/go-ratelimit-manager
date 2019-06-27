@@ -25,7 +25,7 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 100
+	numOfRoutines := 300
 
 	server := getServer()
 
@@ -53,7 +53,7 @@ func Test_CanMakeRequest(t *testing.T) {
 }
 
 func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
-	numOfRequests := 10//rand.Intn(3) + 1
+	numOfRequests := 1//rand.Intn(3) + 1
 	for numOfRequests > 0 {
 		requestWeight := 1//rand.Intn(2) + 1
 
@@ -118,18 +118,18 @@ func Test_RequestCancelled(t *testing.T) {
 	testCases := []TestRequestStatus{
 		{
 			2,
-			Limiter{newRequestsStatus(0, 0, 10, 0, 0, 0), config, pool },
-			newRequestsStatus(0, 0, 8, 0, 0, 0),
+			Limiter{newRequestsStatus(0, 0, 10, 0, 0), config, pool },
+			newRequestsStatus(0, 0, 8, 0, 0),
 		},
 		{
 			1,
-			Limiter{newRequestsStatus(0, 0, 3, 0, 0, 0), config, pool},
-			newRequestsStatus(0, 0, 2, 0, 0, 0),
+			Limiter{newRequestsStatus(0, 0, 3, 0, 0), config, pool},
+			newRequestsStatus(0, 0, 2, 0, 0),
 		},
 		{
 			5,
-			Limiter{newRequestsStatus(0, 0, 10, 0, 0, 0), config, pool},
-			newRequestsStatus(0, 0, 5, 0, 0, 0),
+			Limiter{newRequestsStatus(0, 0, 10, 0, 0), config, pool},
+			newRequestsStatus(0, 0, 5, 0, 0),
 		},
 	}
 
@@ -187,18 +187,18 @@ func Test_RequestFinished(t *testing.T) {
 	testCases := []TestRequestStatus{
 		{
 			2,
-			Limiter{newRequestsStatus(5, 2, 10, 0, 0, 0), config, pool},
-			newRequestsStatus(7, 4, 8, 0, 0, 0),
+			Limiter{newRequestsStatus(5, 2, 10, 0, 0), config, pool},
+			newRequestsStatus(7, 4, 8, 0, 0),
 		},
 		{
 			1,
-			Limiter{newRequestsStatus(0, 40, 3, 0, 0, 0), config, pool},
-			newRequestsStatus(1, 41, 2, 0, 0, 0),
+			Limiter{newRequestsStatus(0, 40, 3, 0, 0), config, pool},
+			newRequestsStatus(1, 41, 2, 0, 0),
 		},
 		{
 			5,
-			Limiter{newRequestsStatus(35, 0, 10, 0, 0, 0), config, pool},
-			newRequestsStatus(40, 5, 5, 0, 0, 0),
+			Limiter{newRequestsStatus(35, 0, 10, 0, 0), config, pool},
+			newRequestsStatus(40, 5, 5, 0, 0),
 		},
 	}
 
@@ -246,9 +246,9 @@ func Test_updateStatusFromDatabase(t *testing.T) {
 	config := NewRateLimitConfig("testHost", 1, 1, 1, 1)
 
 	testCases := []Limiter{
-		{newRequestsStatus(5, 2, 10, 2126523, 2343, 0), config, pool},
-		{newRequestsStatus(0, 40, 3, 236436, 0, 0), config, pool},
-		{newRequestsStatus(35, 0, 10, 0, 9545456, 0), config, pool},
+		{newRequestsStatus(5, 2, 10, 2126523, 2343), config, pool},
+		{newRequestsStatus(0, 40, 3, 236436, 0), config, pool},
+		{newRequestsStatus(35, 0, 10, 0, 9545456), config, pool},
 	}
 
 	key := testCases[0].getStatusKey()
