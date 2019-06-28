@@ -4,13 +4,13 @@ import (
 	"golang.org/x/time/rate"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"time"
 )
 
 var (
-	serverConfig = NewRateLimitConfig("transactionTestHost5", 1800, 60, 30, 1)
+	serverConfig = NewRateLimitConfig("transactionTestHost5", 600, 60, 10, 1)
 
+	//bucket/token rate limit
 	sustainedDuration = rate.Limit(float64(serverConfig.sustainedRequestLimit) / float64(serverConfig.sustainedTimePeriod))
 	burstDuration     = rate.Limit(float64(serverConfig.burstRequestLimit) / float64(serverConfig.burstTimePeriod))
 
@@ -18,21 +18,32 @@ var (
 	burstLimiter     = rate.NewLimiter(burstDuration, serverConfig.burstRequestLimit)
 	bannedLimiter    = rate.NewLimiter(.1666666, 10)
 
+	//window rate limit
+	/*sustainedDuration = time.Minute
+	burstDuration     = time.Second
+
+	sustainedLimiter = ratelimiter.NewRateLimiter(serverConfig.sustainedRequestLimit, sustainedDuration)
+	burstLimiter     = ratelimiter.NewRateLimiter(serverConfig.burstRequestLimit, burstDuration)
+	bannedLimiter = ratelimiter.NewRateLimiter(10, 60)
+
+	 */
+
+
 	port = "8090"
 )
 
 func serveHTTP(w http.ResponseWriter, r *http.Request) {
-	weight, err := strconv.Atoi(r.FormValue("weight"))
-	if err != nil {
-		weight = 1
-	}
+	//weight, err := strconv.Atoi(r.FormValue("weight"))
+	//if err != nil {
+	//	weight = 1
+	//}
 	//simulates random server errors
 	if rand.Intn(200) == 5 {
 		http.Error(w, "Internal Service Error", 500)
 		return
 	}
 
-	if sustainedLimiter.AllowN(time.Now(), weight) && burstLimiter.AllowN(time.Now(), weight) {
+	if sustainedLimiter.Allow() && burstLimiter.Allow() {
 		w.WriteHeader(200)
 	} else if bannedLimiter.Allow() {
 		http.Error(w, "Too many requests", 429)
@@ -55,3 +66,4 @@ func getServer() *http.Server {
 
 	return server
 }
+

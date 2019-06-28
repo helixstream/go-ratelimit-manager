@@ -113,7 +113,6 @@ func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 	r.setFirstBurstRequest(now)
 	//increment the number of pending requests by the weight of the request
 
-
 	if r.hasEnoughTimePassed(now, config) {
 		r.incrementPendingRequests(requestWeight)
 		return true, 0

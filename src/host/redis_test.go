@@ -25,16 +25,26 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 250
+	numOfRoutines := 220
 
 	server := getServer()
 
 	fmt.Print("testing concurrent requests ")
 
-	limiter, err := NewLimiter(serverConfig, pool)
+	testConfig := NewRateLimitConfig(
+		serverConfig.host,
+		serverConfig.sustainedRequestLimit + 0,
+		serverConfig.sustainedTimePeriod,
+		serverConfig.burstRequestLimit + 0,
+		serverConfig.burstTimePeriod,
+	)
+
+	limiter, err := NewLimiter(testConfig, pool)
 	if err != nil {
 		t.Error(err)
 	}
+
+	fmt.Print(limiter.config)
 
 	for i := 0; i < numOfRoutines; i++ {
 		go makeRequests(t, limiter, i, channel)
@@ -53,14 +63,13 @@ func Test_CanMakeRequest(t *testing.T) {
 }
 
 func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
-	numOfRequests := 4//rand.Intn(3) + 1
+
+	numOfRequests := 1//rand.Intn(3) + 1
 	for numOfRequests > 0 {
 		requestWeight := 1//rand.Intn(2) + 1
-
 		canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
-
 		if canMake {
-			fmt.Printf("Can Make: %v, %v, %v \n", id, time.Now().UnixNano() / int64(time.Millisecond), limiter.status)
+			fmt.Printf("Can Make: %v, %v, %v \n", id, limiter.config, limiter.status)
 
 			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
 			if err != nil {
@@ -78,6 +87,10 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
 				}
 				numOfRequests -= requestWeight
 			} else {
+				//if err := limiter.AdjustConfig(requestWeight); err != nil {
+				//	t.Errorf("Error on Request Finished: %v. ", err)
+				//}
+
 				if err := limiter.RequestFinished(requestWeight); err != nil {
 					t.Errorf("Error on Request Finished: %v. ", err)
 				}
