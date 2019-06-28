@@ -3,7 +3,6 @@ package host
 import (
 	"fmt"
 	"github.com/mediocregopher/radix"
-	"math/rand"
 	"strconv"
 	"time"
 )
@@ -102,7 +101,7 @@ func (r *RequestsStatus) timeUntilEndOfPeriod(currentTime int64, host RateLimitC
 	// 											converts from seconds to milliseconds
 	endOfPeriod := r.firstRequest + (host.timePeriod * 1000)
 
-	return endOfPeriod - currentTime - rand.Int63n(11) - 15
+	return endOfPeriod - currentTime
 }
 
 //hasEnoughTimePassed determines if the time between the last request and the present is greater

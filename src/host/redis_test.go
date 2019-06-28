@@ -61,9 +61,9 @@ func Test_CanMakeRequest(t *testing.T) {
 }
 
 func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
-	numOfRequests := rand.Intn(3) + 1
+	numOfRequests := 1
 	for numOfRequests > 0 {
-		requestWeight := rand.Intn(2) + 1
+		requestWeight := 1
 		canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
 		if canMake {
 
@@ -84,7 +84,7 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
 				numOfRequests -= requestWeight
 			} else {
 				if err := limiter.AdjustConfig(requestWeight); err != nil {
-					t.Errorf("Error on Request Finished: %v. ", err)
+					t.Errorf("Error on Adjust Config: %v. ", err)
 				}
 
 				if err := limiter.RequestFinished(requestWeight); err != nil {

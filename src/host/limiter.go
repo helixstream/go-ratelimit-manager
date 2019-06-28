@@ -165,21 +165,22 @@ func (l *Limiter) RequestCancelled(requestWeight int) error {
 //CanMakeRequest communicates with the database to figure out when it is possible to make a request
 //returns true, 0 if a request can be made, and false and the amount of time to sleep when a request cannot be made
 func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
-	key := l.getStatusKey()
+	statusKey := l.getStatusKey()
+	configKey := l.getConfigKey()
 	var canMake bool
 	var wait int64
 	var resp []string
 
-	err := l.pool.Do(radix.WithConn(key, func(c radix.Conn) error {
-		if err := c.Do(radix.Cmd(nil, "WATCH", key, l.getConfigKey())); err != nil {
+	err := l.pool.Do(radix.WithConn(statusKey, func(c radix.Conn) error {
+		if err := c.Do(radix.Cmd(nil, "WATCH", statusKey, configKey)); err != nil {
 			return err
 		}
 
-		if err := l.status.updateStatusFromDatabase(c, key); err != nil {
+		if err := l.status.updateStatusFromDatabase(c, statusKey); err != nil {
 			return err
 		}
 
-		if err := l.config.updateConfigFromDatabase(c, l.getConfigKey()); err != nil {
+		if err := l.config.updateConfigFromDatabase(c, configKey); err != nil {
 			return err
 		}
 
@@ -212,7 +213,7 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 		}()
 
 		err = c.Do(radix.FlatCmd(nil, "HSET",
-			key,
+			statusKey,
 			requests, l.status.requests,
 			pendingRequests, l.status.pendingRequests,
 			firstRequest, l.status.firstRequest,

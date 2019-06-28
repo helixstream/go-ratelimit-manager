@@ -4,7 +4,6 @@ import (
 	"golang.org/x/time/rate"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -23,31 +22,31 @@ var (
 	burstLimiter     = rate.NewLimiter(burstDuration, burst)
 	bannedLimiter    = rate.NewLimiter(.1666666, 10)
 
-	/*
 	//window rate limit
-		sustainedDuration = time.Minute
-		burstDuration     = time.Second
+	/*sustainedDuration = time.Minute
+	burstDuration     = time.Second
 
-		sustainedLimiter = ratelimiter.NewRateLimiter(sus, sustainedDuration)
-		burstLimiter     = ratelimiter.NewRateLimiter(burst, burstDuration)
-		bannedLimiter    = ratelimiter.NewRateLimiter(10, 60)
+	sustainedLimiter = ratelimiter.NewRateLimiter(sus, sustainedDuration)
+	burstLimiter     = ratelimiter.NewRateLimiter(burst, burstDuration)
+	bannedLimiter    = ratelimiter.NewRateLimiter(10, 60)
+
 	*/
 
 	port = "8090"
 )
 
 func serveHTTP(w http.ResponseWriter, r *http.Request) {
-	weight, err := strconv.Atoi(r.FormValue("weight"))
+	/*weight, err := strconv.Atoi(r.FormValue("weight"))
 	if err != nil {
 		weight = 1
-	}
+	}*/
 	//simulates random server errors
 	if rand.Intn(200) == 5 {
 		http.Error(w, "Internal Service Error", 500)
 		return
 	}
 
-	if sustainedLimiter.AllowN(time.Now(), weight) && burstLimiter.AllowN(time.Now(), weight) {
+	if sustainedLimiter.Allow() && burstLimiter.Allow() {
 		w.WriteHeader(200)
 	} else if bannedLimiter.Allow() {
 		http.Error(w, "Too many requests", 429)

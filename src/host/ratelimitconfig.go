@@ -26,22 +26,42 @@ func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePer
 	if sustainedRequestLimit == 0 && sustainedTimePeriod == 0 && burstRequestLimit == 0 && burstTimePeriod == 0 {
 		return rl
 	}
-	//determines which is lower: sustained or burst rate
-	if burstRequestLimit*int(sustainedTimePeriod) > sustainedRequestLimit*int(burstTimePeriod) {
-		lim, period := reduceFraction(int64(sustainedRequestLimit), sustainedTimePeriod)
 
-		rl.requestLimit = int(lim)
-		rl.timePeriod = period
-	} else {
-		lim, period := reduceFraction(int64(burstRequestLimit), burstTimePeriod)
-
-		rl.requestLimit = int(lim)
-		rl.timePeriod = period
-	}
+	rl.requestLimit, rl.timePeriod = determineLowerRate(sustainedRequestLimit, sustainedTimePeriod, burstRequestLimit, burstTimePeriod)
 
 	rl.setTimeBetweenRequests()
 
 	return rl
+}
+
+func determineLowerRate(sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) (int, int64){
+
+	if (sustainedRequestLimit == 0 || sustainedTimePeriod == 0) && (burstRequestLimit == 0 || burstTimePeriod == 0) {
+		//both infinite rates
+		return 0, 0
+
+	} else if sustainedRequestLimit == 0 || sustainedTimePeriod == 0 {
+		//sustained is an infinite rate
+		limit, time := reduceFraction(int64(burstRequestLimit), burstTimePeriod)
+		return int(limit), time
+
+	} else if burstRequestLimit == 0 || burstTimePeriod == 0 {
+		//burst is an infinite rate
+		limit, time := reduceFraction(int64(sustainedRequestLimit), sustainedTimePeriod)
+		return int(limit), time
+	}
+	//determines which is the lower effective rate
+	if burstRequestLimit*int(sustainedTimePeriod) > sustainedRequestLimit*int(burstTimePeriod) {
+		//sustained is the lower rate
+		lim, period := reduceFraction(int64(sustainedRequestLimit), sustainedTimePeriod)
+
+		return int(lim), period
+	} else {
+		//burst is the lower rate or they are equal
+		lim, period := reduceFraction(int64(burstRequestLimit), burstTimePeriod)
+
+		return int(lim), period
+	}
 }
 
 func (rl *RateLimitConfig) setTimeBetweenRequests() {
