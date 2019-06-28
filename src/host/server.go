@@ -1,32 +1,38 @@
 package host
 
 import (
-	"golang.org/x/time/rate"
+	"github.com/youtube/vitess/go/ratelimiter"
 	"math/rand"
 	"net/http"
 	"time"
 )
 
 var (
-	serverConfig = NewRateLimitConfig("transactionTestHost5", 600, 60, 10, 1)
+	sus = 600
+	susPeriod int64 = 60
+	burst = 10
+	burstPeriod int64 = 1
+	serverConfig = NewRateLimitConfig("localHost", sus, int64(susPeriod), burst, int64(burstPeriod))
 
 	//bucket/token rate limit
-	sustainedDuration = rate.Limit(float64(serverConfig.sustainedRequestLimit) / float64(serverConfig.sustainedTimePeriod))
-	burstDuration     = rate.Limit(float64(serverConfig.burstRequestLimit) / float64(serverConfig.burstTimePeriod))
+	/*sustainedDuration = rate.Limit(float64(sus) / float64(susPeriod))
+	burstDuration     = rate.Limit(float64(burst) / float64(burstPeriod))
 
-	sustainedLimiter = rate.NewLimiter(sustainedDuration, serverConfig.sustainedRequestLimit)
-	burstLimiter     = rate.NewLimiter(burstDuration, serverConfig.burstRequestLimit)
+	sustainedLimiter = rate.NewLimiter(sustainedDuration, sus)
+	burstLimiter     = rate.NewLimiter(burstDuration, burst)
 	bannedLimiter    = rate.NewLimiter(.1666666, 10)
 
+	 */
+
 	//window rate limit
-	/*sustainedDuration = time.Minute
+	sustainedDuration = time.Minute
 	burstDuration     = time.Second
 
-	sustainedLimiter = ratelimiter.NewRateLimiter(serverConfig.sustainedRequestLimit, sustainedDuration)
-	burstLimiter     = ratelimiter.NewRateLimiter(serverConfig.burstRequestLimit, burstDuration)
+	sustainedLimiter = ratelimiter.NewRateLimiter(sus, sustainedDuration)
+	burstLimiter     = ratelimiter.NewRateLimiter(burst, burstDuration)
 	bannedLimiter = ratelimiter.NewRateLimiter(10, 60)
 
-	 */
+
 
 
 	port = "8090"

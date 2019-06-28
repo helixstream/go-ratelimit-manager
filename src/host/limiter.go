@@ -15,17 +15,10 @@ type Limiter struct {
 
 func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 	limiter := Limiter{
-		newRequestsStatus(0, 0, 0, 0, 0),
+		newRequestsStatus(0, 0, 0),
 		config,
 		pool,
 	}
-
-	limiter.config = NewRateLimitConfig(config.host,
-		config.sustainedRequestLimit,
-		config.sustainedTimePeriod,
-		config.burstRequestLimit,
-		config.burstTimePeriod,
-	)
 
 	key := limiter.getStatusKey()
 
@@ -46,11 +39,9 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 
 		err = c.Do(radix.FlatCmd(nil, "HSET",
 			limiter.getStatusKey(),
-			sustainedRequests, 0,
-			burstRequests, 0,
+			requests, 0,
 			pendingRequests, 0,
-			firstSustainedRequest, 0,
-			firstBurstRequest, 0,
+			firstRequest, 0,
 		))
 
 		if err != nil {
@@ -59,8 +50,9 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 
 		err = c.Do(radix.FlatCmd(nil, "HSET",
 			limiter.getConfigKey(),
-			sustainedRequests, limiter.config.sustainedRequestLimit,
-			burstRequests, limiter.config.burstRequestLimit,
+			limit, config.requestLimit,
+			timePeriod, config.timePeriod,
+			timeBetweenRequests, config.timeBetweenRequests,
 		))
 
 		if err != nil {
@@ -105,11 +97,7 @@ func (l *Limiter) RequestFinished(requestWeight int) error {
 			}
 		}()
 
-		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, sustainedRequests, requestWeight)); err != nil {
-			return err
-		}
-
-		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, burstRequests, requestWeight)); err != nil {
+		if err = c.Do(radix.FlatCmd(nil, "HINCRBY", key, requests, requestWeight)); err != nil {
 			return err
 		}
 
@@ -224,11 +212,9 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 
 		err = c.Do(radix.FlatCmd(nil, "HSET",
 			key,
-			sustainedRequests, l.status.sustainedRequests,
-			burstRequests, l.status.burstRequests,
+			requests, l.status.requests,
 			pendingRequests, l.status.pendingRequests,
-			firstSustainedRequest, l.status.firstSustainedRequest,
-			firstBurstRequest, l.status.firstBurstRequest,
+			firstRequest, l.status.firstRequest,
 		))
 		if err != nil {
 			return err
@@ -254,55 +240,6 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 }
 
 func (l *Limiter) AdjustConfig(requestWeight int) error{
-	rl := l.config
-	if rl.burstRequestLimit * int(rl.sustainedTimePeriod) > rl.sustainedRequestLimit * int(rl.burstTimePeriod) {
-		//use sustained
-		rl.sustainedRequestLimit -= requestWeight
-	} else {
-		//use burst
-		rl.burstRequestLimit -= requestWeight
-	}
-
-	rl.setTimeBetweenRequests(percentage)
-
-	l.config = rl
-
-	key := l.getConfigKey()
-	//this is radix's way of doing a transaction
-	err := l.pool.Do(radix.WithConn(key, func(c radix.Conn) error {
-
-		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
-			return err
-		}
-		// If any of the calls after the MULTI call error it's important that
-		// the transaction is discarded. This isn't strictly necessary if the
-		// error was a network error, as the connection would be closed by the
-		// client anyway, but it's important otherwise.
-		var err error
-		defer func() {
-			if err != nil {
-				// The return from DISCARD doesn't matter. If it's an error then
-				// it's a network error and the Conn will be closed by the
-				// client.
-				c.Do(radix.Cmd(nil, "DISCARD"))
-			}
-		}()
-
-		if err = c.Do(radix.FlatCmd(nil, "HSET", key, sustainedRequests, l.config.sustainedRequestLimit, burstRequests, l.config.burstRequestLimit)); err != nil {
-			return err
-		}
-
-		if err = c.Do(radix.Cmd(nil, "EXEC")); err != nil {
-			return err
-		}
-
-		return nil
-	}))
-
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

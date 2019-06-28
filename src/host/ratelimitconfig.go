@@ -9,44 +9,46 @@ import (
 //RateLimitConfig struct contains the rate limit information for a specific host
 type RateLimitConfig struct {
 	host                  string //may change to different data type later
-	sustainedRequestLimit int    //the number of requests that can be made during the sustained period
-	sustainedTimePeriod   int64  //length of sustained period in seconds
-	burstRequestLimit     int    //the number of requests that can be made during the burst period
-	burstTimePeriod       int64  //length of the burst period in seconds
+	requestLimit	int
+	timePeriod		int64
 	timeBetweenRequests int64
 }
 
-var percentage int64 = 100
+const (
+	limit = "limit"
+	timePeriod = "timePeriod"
+	timeBetweenRequests = "timeBetween"
+)
 
 func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) RateLimitConfig {
-	rl := RateLimitConfig{host, sustainedRequestLimit, sustainedTimePeriod, burstRequestLimit, burstTimePeriod, 0}
-	rl.setTimeBetweenRequests(percentage)
+	rl := RateLimitConfig{host, 0, 0, 0}
+
+	if burstRequestLimit * int(sustainedTimePeriod) > sustainedRequestLimit * int(burstTimePeriod) {
+		//TODO reduce fraction
+		rl.requestLimit = sustainedRequestLimit
+		rl.timePeriod = sustainedTimePeriod
+	} else {
+		rl.requestLimit = burstRequestLimit
+		rl.timePeriod = burstTimePeriod
+	}
+
+	rl.setTimeBetweenRequests()
+
 	return rl
 }
 
-func (rl *RateLimitConfig) setTimeBetweenRequests(percentage int64) {
+func (rl *RateLimitConfig) setTimeBetweenRequests() {
 	//requests per second
 	var time int64
 
-	if rl.sustainedTimePeriod == 0 || rl.burstTimePeriod == 0{
+	if rl.timePeriod == 0 || rl.requestLimit == 0 {
 		return
 	}
-	limit, timePeriod := rl.getEffectiveLimit()
 
-	time = timePeriod * 1000
+	time = rl.timePeriod * 1000
 	//percentage decrease time period by (9 = 10% decrease, 100 - 90 = 10%)
-	time *= percentage
-	time = time/100
 
-	rl.timeBetweenRequests = time/int64(limit)
-}
-
-func (rl *RateLimitConfig) getEffectiveLimit() (int, int64) {
-	if rl.burstRequestLimit * int(rl.sustainedTimePeriod) > rl.sustainedRequestLimit * int(rl.burstTimePeriod) {
-		return rl.sustainedRequestLimit, rl.sustainedTimePeriod
-	} else {
-		return rl.burstRequestLimit, rl.burstTimePeriod
-	}
+	rl.timeBetweenRequests = time/int64(rl.requestLimit)
 }
 
 func (rl *RateLimitConfig) updateConfigFromDatabase(c radix.Conn, key string) error {
@@ -61,9 +63,11 @@ func (rl *RateLimitConfig) updateConfigFromDatabase(c radix.Conn, key string) er
 		return nil
 	}
 
-	sus, _ := strconv.Atoi(values[0])
-	burst, _ := strconv.Atoi(values[1])
+	limit, _ := strconv.Atoi(values[0])
+	timePeriod, _ := strconv.ParseInt(values[1], 10, 64)
+	timeBetween, _ := strconv.ParseInt(values[2], 10, 64)
 
-	*rl = NewRateLimitConfig(rl.host, sus, rl.sustainedTimePeriod, burst, rl.burstTimePeriod)
+	*rl = RateLimitConfig{rl.host, limit, timePeriod, timeBetween}
 	return nil
 }
+

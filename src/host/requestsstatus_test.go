@@ -1,9 +1,7 @@
 package host
 
-import (
-	"testing"
-)
 /*
+
 func Test_CanMakeRequestLogic(t *testing.T) {
 	hosts := []RateLimitConfig{
 		NewRateLimitConfig("test_host_1", 1200, 60, 20, 1),
@@ -147,7 +145,7 @@ func Test_CanMakeRequestLogic(t *testing.T) {
 		}
 	}
 }
-*/
+
 func Test_IsInSustainedPeriod(t *testing.T) {
 	hosts := []RateLimitConfig{
 		NewRateLimitConfig("test_host_1", 0, 60, 0, 0),
@@ -392,3 +390,7 @@ func Test_WillHitBurstLimit(t *testing.T) {
 		}
 	}
 }
+
+
+ */
+

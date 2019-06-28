@@ -25,7 +25,7 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 220
+	numOfRoutines := 200
 
 	server := getServer()
 
@@ -33,10 +33,10 @@ func Test_CanMakeRequest(t *testing.T) {
 
 	testConfig := NewRateLimitConfig(
 		serverConfig.host,
-		serverConfig.sustainedRequestLimit + 0,
-		serverConfig.sustainedTimePeriod,
-		serverConfig.burstRequestLimit + 0,
-		serverConfig.burstTimePeriod,
+		sus + 0,
+		int64(susPeriod),
+		burst + 0,
+		int64(burstPeriod),
 	)
 
 	limiter, err := NewLimiter(testConfig, pool)
@@ -61,6 +61,7 @@ func Test_CanMakeRequest(t *testing.T) {
 
 	fmt.Print("done")
 }
+
 
 func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
 
@@ -87,10 +88,6 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
 				}
 				numOfRequests -= requestWeight
 			} else {
-				//if err := limiter.AdjustConfig(requestWeight); err != nil {
-				//	t.Errorf("Error on Request Finished: %v. ", err)
-				//}
-
 				if err := limiter.RequestFinished(requestWeight); err != nil {
 					t.Errorf("Error on Request Finished: %v. ", err)
 				}
@@ -126,27 +123,28 @@ func Test_RequestCancelled(t *testing.T) {
 		expected      RequestsStatus
 	}
 
-	config := NewRateLimitConfig("testHost", 0, 0, 0, 0)
+	config := NewRateLimitConfig("testHost1", 0, 0, 0, 0)
 
 	testCases := []TestRequestStatus{
 		{
 			2,
-			Limiter{newRequestsStatus(0, 0, 10, 0, 0), config, pool },
-			newRequestsStatus(0, 0, 8, 0, 0),
+			Limiter{newRequestsStatus(0, 10, 0), config, pool },
+			newRequestsStatus(0, 8, 0),
 		},
 		{
 			1,
-			Limiter{newRequestsStatus(0, 0, 3, 0, 0), config, pool},
-			newRequestsStatus(0, 0, 2, 0, 0),
+			Limiter{newRequestsStatus(0, 3, 0), config, pool},
+			newRequestsStatus(0, 2, 0),
 		},
 		{
 			5,
-			Limiter{newRequestsStatus(0, 0, 10, 0, 0), config, pool},
-			newRequestsStatus(0, 0, 5, 0, 0),
+			Limiter{newRequestsStatus(0, 10, 0), config, pool},
+			newRequestsStatus(0, 5, 0),
 		},
 	}
 
 	key := testCases[0].limiter.getStatusKey()
+
 
 	for i := 0; i < len(testCases); i++ {
 		l := testCases[i].limiter
@@ -154,12 +152,11 @@ func Test_RequestCancelled(t *testing.T) {
 		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
 			err = pool.Do(radix.FlatCmd(nil, "HSET",
 				key,
-				sustainedRequests, l.status.sustainedRequests,
-				burstRequests, l.status.burstRequests,
+				requests, l.status.requests,
 				pendingRequests, l.status.pendingRequests,
-				firstSustainedRequest, l.status.firstSustainedRequest,
-				firstBurstRequest, l.status.firstBurstRequest,
+				firstRequest, l.status.firstRequest,
 			))
+
 			if err != nil {
 				return err
 			}
@@ -195,23 +192,23 @@ func Test_RequestFinished(t *testing.T) {
 		expected      RequestsStatus
 	}
 
-	config := NewRateLimitConfig("testHost", 0, 0, 0, 0)
+	config := NewRateLimitConfig("testHost1", 0, 0, 0, 0)
 
 	testCases := []TestRequestStatus{
 		{
 			2,
-			Limiter{newRequestsStatus(5, 2, 10, 0, 0), config, pool},
-			newRequestsStatus(7, 4, 8, 0, 0),
+			Limiter{newRequestsStatus(5, 2, 0), config, pool},
+			newRequestsStatus(7, 0, 0),
 		},
 		{
 			1,
-			Limiter{newRequestsStatus(0, 40, 3, 0, 0), config, pool},
-			newRequestsStatus(1, 41, 2, 0, 0),
+			Limiter{newRequestsStatus(0, 40, 0), config, pool},
+			newRequestsStatus(1, 39, 0),
 		},
 		{
 			5,
-			Limiter{newRequestsStatus(35, 0, 10, 0, 0), config, pool},
-			newRequestsStatus(40, 5, 5, 0, 0),
+			Limiter{newRequestsStatus(35, 5, 0), config, pool},
+			newRequestsStatus(40, 0, 0),
 		},
 	}
 
@@ -223,11 +220,9 @@ func Test_RequestFinished(t *testing.T) {
 		err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
 			err = pool.Do(radix.FlatCmd(nil, "HSET",
 				key,
-				sustainedRequests, l.status.sustainedRequests,
-				burstRequests, l.status.burstRequests,
+				requests, l.status.requests,
 				pendingRequests, l.status.pendingRequests,
-				firstSustainedRequest, l.status.firstSustainedRequest,
-				firstBurstRequest, l.status.firstBurstRequest,
+				firstRequest, l.status.firstRequest,
 			))
 			if err != nil {
 				return err
@@ -248,7 +243,6 @@ func Test_RequestFinished(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-
 		if diff := deep.Equal(l.status, testCases[i].expected); diff != nil {
 			t.Errorf("Loop: %v. %v. ", i, diff)
 		}
@@ -256,12 +250,12 @@ func Test_RequestFinished(t *testing.T) {
 }
 
 func Test_updateStatusFromDatabase(t *testing.T) {
-	config := NewRateLimitConfig("testHost", 1, 1, 1, 1)
+	config := NewRateLimitConfig("testHost1", 1, 1, 1, 1)
 
 	testCases := []Limiter{
-		{newRequestsStatus(5, 2, 10, 2126523, 2343), config, pool},
-		{newRequestsStatus(0, 40, 3, 236436, 0), config, pool},
-		{newRequestsStatus(35, 0, 10, 0, 9545456), config, pool},
+		{newRequestsStatus(5, 2, 23564), config, pool},
+		{newRequestsStatus(0, 40, 3454345), config, pool},
+		{newRequestsStatus(35, 0, 266256), config, pool},
 	}
 
 	key := testCases[0].getStatusKey()
@@ -273,11 +267,9 @@ func Test_updateStatusFromDatabase(t *testing.T) {
 		err = pool.Do(radix.WithConn(key, func(c radix.Conn) error {
 			err = c.Do(radix.FlatCmd(nil, "HSET",
 				key,
-				sustainedRequests, l.status.sustainedRequests,
-				burstRequests, l.status.burstRequests,
+				requests, l.status.requests,
 				pendingRequests, l.status.pendingRequests,
-				firstSustainedRequest, l.status.firstSustainedRequest,
-				firstBurstRequest, l.status.firstBurstRequest,
+				firstRequest, l.status.firstRequest,
 			))
 			if err != nil {
 				return err
