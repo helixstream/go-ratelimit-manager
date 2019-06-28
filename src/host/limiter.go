@@ -15,7 +15,7 @@ type Limiter struct {
 
 func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 	limiter := Limiter{
-		newRequestsStatus(0, 0, 0),
+		newRequestsStatus(0, 0, 0, 0),
 		config,
 		pool,
 	}
@@ -42,6 +42,7 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 			requests, 0,
 			pendingRequests, 0,
 			firstRequest, 0,
+			lastErrorTime, 0,
 		))
 
 		if err != nil {
@@ -215,6 +216,7 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 			requests, l.status.requests,
 			pendingRequests, l.status.pendingRequests,
 			firstRequest, l.status.firstRequest,
+			lastErrorTime, 0,
 		))
 		if err != nil {
 			return err
@@ -239,7 +241,56 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 	return canMake, wait
 }
 
-func (l *Limiter) AdjustConfig(requestWeight int) error{
+func (l *Limiter) AdjustConfig(requestWeight int) error {
+	l.config.requestLimit -= requestWeight
+	l.config.setTimeBetweenRequests()
+
+	key := l.getConfigKey()
+	//this is radix's way of doing a transaction
+	err := l.pool.Do(radix.WithConn(key, func(c radix.Conn) error {
+
+		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
+			return err
+		}
+		// If any of the calls after the MULTI call error it's important that
+		// the transaction is discarded. This isn't strictly necessary if the
+		// error was a network error, as the connection would be closed by the
+		// client anyway, but it's important otherwise.
+		var err error
+		defer func() {
+			if err != nil {
+				// The return from DISCARD doesn't matter. If it's an error then
+				// it's a network error and the Conn will be closed by the
+				// client.
+				c.Do(radix.Cmd(nil, "DISCARD"))
+			}
+		}()
+
+		err = c.Do(radix.FlatCmd(nil, "HSET", key,
+			limit, l.config.requestLimit,
+			timePeriod, l.config.timePeriod,
+			timeBetweenRequests, l.config.timeBetweenRequests,
+		))
+
+		err = c.Do(radix.FlatCmd(nil, "HSET", key,
+			lastErrorTime, getUnixTimeMilliseconds(),
+		))
+
+		if err != nil {
+			return err
+		}
+
+		if err = c.Do(radix.Cmd(nil, "EXEC")); err != nil {
+			return err
+		}
+
+		return nil
+	}))
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

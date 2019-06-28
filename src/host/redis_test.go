@@ -14,7 +14,7 @@ import (
 )
 
 //pool of connections to redis database
-var pool, err = radix.NewPool("tcp", "127.0.0.1:6379", 500)
+var pool, err = radix.NewPool("tcp", "127.0.0.1:6379", 1000)
 
 func Test_CanMakeRequest(t *testing.T) {
 	//handles creating new pool error
@@ -25,7 +25,7 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 200
+	numOfRoutines := 300
 
 	server := getServer()
 
@@ -33,18 +33,16 @@ func Test_CanMakeRequest(t *testing.T) {
 
 	testConfig := NewRateLimitConfig(
 		serverConfig.host,
-		sus + 0,
-		int64(susPeriod),
-		burst + 0,
-		int64(burstPeriod),
+		sus,
+		susPeriod,
+		burst,
+		burstPeriod,
 	)
 
 	limiter, err := NewLimiter(testConfig, pool)
 	if err != nil {
 		t.Error(err)
 	}
-
-	fmt.Print(limiter.config)
 
 	for i := 0; i < numOfRoutines; i++ {
 		go makeRequests(t, limiter, i, channel)
@@ -62,15 +60,12 @@ func Test_CanMakeRequest(t *testing.T) {
 	fmt.Print("done")
 }
 
-
 func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
-
-	numOfRequests := 1//rand.Intn(3) + 1
+	numOfRequests := rand.Intn(3) + 1
 	for numOfRequests > 0 {
-		requestWeight := 1//rand.Intn(2) + 1
+		requestWeight := rand.Intn(2) + 1
 		canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
 		if canMake {
-			fmt.Printf("Can Make: %v, %v, %v \n", id, limiter.config, limiter.status)
 
 			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
 			if err != nil {
@@ -88,6 +83,10 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
 				}
 				numOfRequests -= requestWeight
 			} else {
+				if err := limiter.AdjustConfig(requestWeight); err != nil {
+					t.Errorf("Error on Request Finished: %v. ", err)
+				}
+
 				if err := limiter.RequestFinished(requestWeight); err != nil {
 					t.Errorf("Error on Request Finished: %v. ", err)
 				}
@@ -128,23 +127,22 @@ func Test_RequestCancelled(t *testing.T) {
 	testCases := []TestRequestStatus{
 		{
 			2,
-			Limiter{newRequestsStatus(0, 10, 0), config, pool },
-			newRequestsStatus(0, 8, 0),
+			Limiter{newRequestsStatus(0, 10, 0, 0), config, pool},
+			newRequestsStatus(0, 8, 0, 0),
 		},
 		{
 			1,
-			Limiter{newRequestsStatus(0, 3, 0), config, pool},
-			newRequestsStatus(0, 2, 0),
+			Limiter{newRequestsStatus(0, 3, 0, 0), config, pool},
+			newRequestsStatus(0, 2, 0, 0),
 		},
 		{
 			5,
-			Limiter{newRequestsStatus(0, 10, 0), config, pool},
-			newRequestsStatus(0, 5, 0),
+			Limiter{newRequestsStatus(0, 10, 0, 0), config, pool},
+			newRequestsStatus(0, 5, 0, 0),
 		},
 	}
 
 	key := testCases[0].limiter.getStatusKey()
-
 
 	for i := 0; i < len(testCases); i++ {
 		l := testCases[i].limiter
@@ -155,6 +153,7 @@ func Test_RequestCancelled(t *testing.T) {
 				requests, l.status.requests,
 				pendingRequests, l.status.pendingRequests,
 				firstRequest, l.status.firstRequest,
+				lastErrorTime, l.status.lastErrorTime,
 			))
 
 			if err != nil {
@@ -197,18 +196,18 @@ func Test_RequestFinished(t *testing.T) {
 	testCases := []TestRequestStatus{
 		{
 			2,
-			Limiter{newRequestsStatus(5, 2, 0), config, pool},
-			newRequestsStatus(7, 0, 0),
+			Limiter{newRequestsStatus(5, 2, 0, 0), config, pool},
+			newRequestsStatus(7, 0, 0, 0),
 		},
 		{
 			1,
-			Limiter{newRequestsStatus(0, 40, 0), config, pool},
-			newRequestsStatus(1, 39, 0),
+			Limiter{newRequestsStatus(0, 40, 0, 0), config, pool},
+			newRequestsStatus(1, 39, 0, 0),
 		},
 		{
 			5,
-			Limiter{newRequestsStatus(35, 5, 0), config, pool},
-			newRequestsStatus(40, 0, 0),
+			Limiter{newRequestsStatus(35, 5, 0, 0), config, pool},
+			newRequestsStatus(40, 0, 0, 0),
 		},
 	}
 
@@ -223,6 +222,7 @@ func Test_RequestFinished(t *testing.T) {
 				requests, l.status.requests,
 				pendingRequests, l.status.pendingRequests,
 				firstRequest, l.status.firstRequest,
+				lastErrorTime, l.status.lastErrorTime,
 			))
 			if err != nil {
 				return err
@@ -253,9 +253,9 @@ func Test_updateStatusFromDatabase(t *testing.T) {
 	config := NewRateLimitConfig("testHost1", 1, 1, 1, 1)
 
 	testCases := []Limiter{
-		{newRequestsStatus(5, 2, 23564), config, pool},
-		{newRequestsStatus(0, 40, 3454345), config, pool},
-		{newRequestsStatus(35, 0, 266256), config, pool},
+		{newRequestsStatus(5, 2, 23564, 0), config, pool},
+		{newRequestsStatus(0, 40, 3454345, 0), config, pool},
+		{newRequestsStatus(35, 0, 266256, 0), config, pool},
 	}
 
 	key := testCases[0].getStatusKey()
@@ -270,6 +270,7 @@ func Test_updateStatusFromDatabase(t *testing.T) {
 				requests, l.status.requests,
 				pendingRequests, l.status.pendingRequests,
 				firstRequest, l.status.firstRequest,
+				lastErrorTime, l.status.lastErrorTime,
 			))
 			if err != nil {
 				return err
