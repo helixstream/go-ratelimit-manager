@@ -54,6 +54,11 @@ func (r *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimitConfig) (bool, int64) {
 	now := getUnixTimeMilliseconds()
 
+	timeSinceLastError := now - r.lastErrorTime
+	if timeSinceLastError < 1000 {
+		return false, 1000 - timeSinceLastError
+	}
+
 	if r.isInPeriod(now, config) {
 
 		if r.willHitLimit(requestWeight, config) {
