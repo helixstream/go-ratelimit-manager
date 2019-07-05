@@ -4,16 +4,16 @@ import "testing"
 
 func Test_DetermineLowerRate(t *testing.T) {
 	type testConfig struct {
-		susLimit int
-		susPeriod int64
-		burstLimit int
+		susLimit    int
+		susPeriod   int64
+		burstLimit  int
 		burstPeriod int64
 
-		expectedLim int
+		expectedLim  int
 		expectedRate int64
 	}
 
-	testCases := []testConfig {
+	testCases := []testConfig{
 		{
 			0, 0, 0, 0,
 			0,

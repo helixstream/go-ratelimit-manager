@@ -14,9 +14,20 @@ import (
 )
 
 //pool of connections to redis database
-var pool, err = radix.NewPool("tcp", "127.0.0.1:6379", 1000)
+var (
+	pool, err     = radix.NewPool("tcp", "127.0.0.1:6379", 1000)
+	numOfRoutines = 100
 
-func Test_CanMakeRequest(t *testing.T) {
+	testConfig = NewRateLimitConfig(
+		serverConfig.host,
+		sus,
+		susPeriod,
+		burst,
+		burstPeriod,
+	)
+)
+
+func Test_CanMakeRequestTokenServer(t *testing.T) {
 	//handles creating new pool error
 	if err != nil {
 		panic(err)
@@ -25,19 +36,9 @@ func Test_CanMakeRequest(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	channel := make(chan string)
 
-	numOfRoutines := 300
-
 	server := getServer()
 
-	fmt.Print("testing concurrent requests ")
-
-	testConfig := NewRateLimitConfig(
-		serverConfig.host,
-		sus,
-		susPeriod,
-		burst,
-		burstPeriod,
-	)
+	fmt.Print("testing token rate limit server")
 
 	limiter, err := NewLimiter(testConfig, pool)
 	if err != nil {
@@ -45,7 +46,7 @@ func Test_CanMakeRequest(t *testing.T) {
 	}
 
 	for i := 0; i < numOfRoutines; i++ {
-		go makeRequests(t, limiter, i, channel)
+		go makeRequests(t, limiter, i, channel, "http://localhost:"+port+"/testRateLimit")
 		time.Sleep(time.Duration(10) * time.Millisecond)
 	}
 
@@ -57,17 +58,43 @@ func Test_CanMakeRequest(t *testing.T) {
 		panic(err)
 	}
 
-	fmt.Print("done")
+	fmt.Print("done \n")
 }
 
-func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
-	numOfRequests := 1
+func Test_CanMakeRequestWindowServer(t *testing.T) {
+	fmt.Print("testing window rate limit server")
+
+	windowServer := getWindowServer()
+	channel := make(chan string)
+
+	limiter, err := NewLimiter(testConfig, pool)
+	if err != nil {
+		t.Error(err)
+	}
+
+	for i := 0; i < numOfRoutines; i++ {
+		go makeRequests(t, limiter, i, channel, "http://localhost:"+windowPort+"/testWindowRateLimit")
+		time.Sleep(time.Duration(10) * time.Millisecond)
+	}
+
+	for i := 0; i < numOfRoutines; i++ {
+		<-channel
+	}
+
+	if err := windowServer.Shutdown(context.TODO()); err != nil {
+		panic(err)
+	}
+
+	fmt.Print("done ")
+}
+
+func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string, url string) {
+	numOfRequests := 3
 	for numOfRequests > 0 {
 		requestWeight := 1
 		canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
 		if canMake {
-
-			statusCode, err := getStatusCode("http://127.0.0.1:"+port+"/testRateLimit", requestWeight)
+			statusCode, err := getStatusCode(url, requestWeight)
 			if err != nil {
 				t.Errorf("Error on getting Status Code: %v. ", err)
 			}
@@ -83,6 +110,10 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
 				}
 				numOfRequests -= requestWeight
 			} else {
+				if getUnixTimeMilliseconds()-limiter.status.lastErrorTime < 5000 {
+					t.Errorf("Multiple 429s too close together \n")
+				}
+
 				if err := limiter.AdjustConfig(requestWeight); err != nil {
 					t.Errorf("Error on Adjust Config: %v. ", err)
 				}
@@ -90,17 +121,22 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string) {
 				if err := limiter.RequestFinished(requestWeight); err != nil {
 					t.Errorf("Error on Request Finished: %v. ", err)
 				}
-				fmt.Printf("Routine: %v. %v. %v, \n", id, statusCode, limiter.status)
-				t.Errorf("Routine: %v. %v. ", id, statusCode)
+				fmt.Printf("Routine: %v. %v. %v, %v \n", id, statusCode, limiter.status, limiter.config)
 			}
+
+			fmt.Print(".")
 
 		} else if sleepTime != 0 {
 			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}
 
-	fmt.Print(".")
-	c <- "done"
+	//if the time since the last error is less than one minute
+	if getUnixTimeMilliseconds()-limiter.status.lastErrorTime < 60*1000 {
+		go makeRequests(t, limiter, id, c, url)
+	} else {
+		c <- "done"
+	}
 }
 
 func getStatusCode(url string, weight int) (int, error) {

@@ -34,7 +34,7 @@ func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePer
 	return rl
 }
 
-func determineLowerRate(sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) (int, int64){
+func determineLowerRate(sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) (int, int64) {
 
 	if (sustainedRequestLimit == 0 || sustainedTimePeriod == 0) && (burstRequestLimit == 0 || burstTimePeriod == 0) {
 		//both infinite rates

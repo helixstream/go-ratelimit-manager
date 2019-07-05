@@ -42,7 +42,7 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 			requests, 0,
 			pendingRequests, 0,
 			firstRequest, 0,
-			lastErrorTime, 0,
+			lastErrorTime, limiter.status.lastErrorTime,
 		))
 
 		if err != nil {
@@ -217,7 +217,7 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 			requests, l.status.requests,
 			pendingRequests, l.status.pendingRequests,
 			firstRequest, l.status.firstRequest,
-			lastErrorTime, 0,
+			lastErrorTime, l.status.lastErrorTime,
 		))
 		if err != nil {
 			return err
@@ -246,9 +246,10 @@ func (l *Limiter) AdjustConfig(requestWeight int) error {
 	l.config.requestLimit -= requestWeight
 	l.config.setTimeBetweenRequests()
 
-	key := l.getConfigKey()
+	configKey := l.getConfigKey()
+	statusKey := l.getStatusKey()
 	//this is radix's way of doing a transaction
-	err := l.pool.Do(radix.WithConn(key, func(c radix.Conn) error {
+	err := l.pool.Do(radix.WithConn(configKey, func(c radix.Conn) error {
 
 		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
 			return err
@@ -267,13 +268,13 @@ func (l *Limiter) AdjustConfig(requestWeight int) error {
 			}
 		}()
 
-		err = c.Do(radix.FlatCmd(nil, "HSET", key,
+		err = c.Do(radix.FlatCmd(nil, "HSET", configKey,
 			limit, l.config.requestLimit,
 			timePeriod, l.config.timePeriod,
 			timeBetweenRequests, l.config.timeBetweenRequests,
 		))
 
-		err = c.Do(radix.FlatCmd(nil, "HSET", key,
+		err = c.Do(radix.FlatCmd(nil, "HSET", statusKey,
 			lastErrorTime, getUnixTimeMilliseconds(),
 		))
 
