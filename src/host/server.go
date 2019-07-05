@@ -9,13 +9,18 @@ import (
 )
 
 var (
-	serverConfig = NewRateLimitConfig("transactionTestHost4", 1000, 60, 20, 1)
+	sus                = 600
+	susPeriod    int64 = 60
+	burst              = 10
+	burstPeriod  int64 = 1
+	serverConfig       = NewRateLimitConfig("localHost4", sus, int64(susPeriod), burst, int64(burstPeriod))
 
-	sustainedDuration = rate.Limit(float64(serverConfig.sustainedRequestLimit) / float64(serverConfig.sustainedTimePeriod))
-	burstDuration     = rate.Limit(float64(serverConfig.burstRequestLimit) / float64(serverConfig.burstTimePeriod))
+	//bucket/token rate limit
+	sustainedDuration = rate.Limit(float64(sus) / float64(susPeriod))
+	burstDuration     = rate.Limit(float64(burst) / float64(burstPeriod))
 
-	sustainedLimiter = rate.NewLimiter(sustainedDuration, serverConfig.sustainedRequestLimit)
-	burstLimiter     = rate.NewLimiter(burstDuration, serverConfig.burstRequestLimit)
+	sustainedLimiter = rate.NewLimiter(sustainedDuration, sus)
+	burstLimiter     = rate.NewLimiter(burstDuration, burst)
 	bannedLimiter    = rate.NewLimiter(.1666666, 10)
 
 	port = "8090"

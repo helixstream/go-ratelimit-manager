@@ -9,19 +9,17 @@ import (
 
 //requestsStatus struct contains all info pertaining to the cumulative requests made to a specific host
 type RequestsStatus struct {
-	sustainedRequests     int   //total number of completed requests made during the current sustained period
-	burstRequests         int   //total number of completed requests made during the current burst period
-	pendingRequests       int   //number of requests that have started but have not completed
-	firstSustainedRequest int64 //timestamp in milliseconds that represents when the sustained period began
-	firstBurstRequest     int64 //timestamp in milliseconds that represents when the burst period began
+	requests        int //total number of completed requests made during the current sustained period
+	pendingRequests int //number of requests that have started but have not completed
+	firstRequest    int64
+	lastErrorTime   int64
 }
 
 const (
-	sustainedRequests     = "sustainedRequests"
-	burstRequests         = "burstRequests"
-	pendingRequests       = "pendingRequests"
-	firstSustainedRequest = "firstSustainedRequest"
-	firstBurstRequest     = "firstBurstRequest"
+	requests        = "requests"
+	pendingRequests = "pendingRequests"
+	firstRequest    = "firstRequest"
+	lastErrorTime   = "lasterror"
 )
 
 //key convention redis: struct:host
@@ -37,18 +35,16 @@ func (r *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 		return err
 	}
 
-	if len(values) != 5 {
-		*r = newRequestsStatus(0, 0, 0, 0, 0)
+	if len(values) != 4 {
 		return nil
 	}
 
-	sus, _ := strconv.Atoi(values[0])
-	burst, _ := strconv.Atoi(values[1])
-	pending, _ := strconv.Atoi(values[2])
-	firstSus, _ := strconv.ParseInt(values[3], 10, 64)
-	firstBurst, _ := strconv.ParseInt(values[4], 10, 64)
+	requests, _ := strconv.Atoi(values[0])
+	pending, _ := strconv.Atoi(values[1])
+	first, _ := strconv.ParseInt(values[2], 10, 64)
+	last, _ := strconv.ParseInt(values[3], 10, 64)
 
-	*r = newRequestsStatus(sus, burst, pending, firstSus, firstBurst)
+	*r = newRequestsStatus(requests, pending, first, last)
 	return nil
 }
 
@@ -57,103 +53,77 @@ func (r *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 //returns false and the number of milliseconds to wait if a request cannot be made
 func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimitConfig) (bool, int64) {
 	now := getUnixTimeMilliseconds()
-	//if request is in the current burst period
-	if r.isInBurstPeriod(now, config) {
-		//will the request push us over the burst limit
-		if r.willHitBurstLimit(requestWeight, config) {
-			//is so do not make the request and wait
-			return false, r.timeUntilEndOfBurst(now, config)
-		}
 
-		//determines if the request will go over the sustained limit
-		if r.willHitSustainedLimit(requestWeight, config) {
-			//is so do not make the request and wait
-			return false, r.timeUntilEndOfSustained(now, config)
-		}
-
-		//did not hit either burst or sustained limit
-		//so can make request and increments pending requests
-		r.incrementPendingRequests(requestWeight)
-		return true, 0
-
-		//not in burst period, but in sustained period
+	timeSinceLastError := now - r.lastErrorTime
+	if timeSinceLastError < 1000 {
+		return false, 1000 - timeSinceLastError
 	}
 
-	if r.isInSustainedPeriod(now, config) {
-		//reset burst to 0 and sets start of new burst period to now
-		r.setBurstRequests(0)
-		r.setFirstBurstRequest(now)
+	if r.isInPeriod(now, config) {
 
-		if r.willHitSustainedLimit(requestWeight, config) {
-			return false, r.timeUntilEndOfSustained(now, config)
+		if r.willHitLimit(requestWeight, config) {
+			return false, r.timeUntilEndOfPeriod(now, config)
 		}
 
-		//can make request because did not hit sustained limit
-		r.incrementPendingRequests(requestWeight)
-		return true, 0
+		if r.hasEnoughTimePassed(now, config) {
+			r.pendingRequests += requestWeight
+			return true, 0
+		}
+
+		return false, r.timeUntilPeriodBetweenRequestsEnds(now, config)
 
 	}
-	//out of burst and sustained, able to make request
+	//out of period, able to make request
+	r.requests = 0
+	r.firstRequest = now
 
-	//reset number of sustained and burst in new time period
-	r.setSustainedRequests(0)
-	r.setBurstRequests(0)
-	//set start of both sustained and burst to now
-	r.setFirstSustainedRequest(now)
-	r.setFirstBurstRequest(now)
-	//increment the number of pending requests by the weight of the request
-	r.incrementPendingRequests(requestWeight)
+	if r.hasEnoughTimePassed(now, config) {
+		r.pendingRequests += requestWeight
+		return true, 0
+	}
 
-	return true, 0
-
+	return false, r.timeUntilPeriodBetweenRequestsEnds(now, config)
 }
 
-//isInSustainedPeriod checks if the current request is in the sustained period
-func (r *RequestsStatus) isInSustainedPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
-	timeSincePeriodStart := currentTime - r.firstSustainedRequest
+//isInPeriod checks if the current request falls in the time frame of the period
+func (r *RequestsStatus) isInPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
+	timeSincePeriodStart := currentTime - r.firstRequest
 	//								converts seconds to milliseconds
-	return timeSincePeriodStart < hostConfig.sustainedTimePeriod*1000 && timeSincePeriodStart >= 0
+	return timeSincePeriodStart < hostConfig.timePeriod*1000 && timeSincePeriodStart >= 0
 }
 
-//isInBurstPeriod checks if the current request is in the burst period
-func (r *RequestsStatus) isInBurstPeriod(currentTime int64, hostConfig RateLimitConfig) bool {
-	timeSincePeriodStart := currentTime - r.firstBurstRequest
-	//								converts seconds to milliseconds
-	return timeSincePeriodStart < hostConfig.burstTimePeriod*1000 && timeSincePeriodStart >= 0
-}
-
-//willHitSustainedLimit checks if the current request will hit the sustained rate limit
+//willHitLimit checks if the current request will hit the rate limit
 //if the total number of requests plus the weight of the requested request is greater than the limit
 //than the requested request should not occur because it would cause us to go over the limit
-func (r *RequestsStatus) willHitSustainedLimit(requestWeight int, host RateLimitConfig) bool {
-	totalRequests := r.sustainedRequests + r.pendingRequests
+func (r *RequestsStatus) willHitLimit(requestWeight int, host RateLimitConfig) bool {
+	totalRequests := r.requests + r.pendingRequests
 
-	return totalRequests+requestWeight > host.sustainedRequestLimit
+	return totalRequests+requestWeight > host.requestLimit
 }
 
-//willHitBurstLimit checks if the current request will hit the burst rate limit
-//if the total number of requests plus the weight of the requested request is greater than the limit
-//than the requested request should not occur because it would cause us to go over the limit
-func (r *RequestsStatus) willHitBurstLimit(requestWeight int, host RateLimitConfig) bool {
-	totalRequests := r.burstRequests + r.pendingRequests
-
-	return totalRequests+requestWeight > host.burstRequestLimit
-}
-
-//timeUntilEndOfSustained calculates the time in milliseconds until the end of the sustained period
-func (r *RequestsStatus) timeUntilEndOfSustained(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
+//timeUntilEndOfPeriod calculates the time in milliseconds until the end of the period
+func (r *RequestsStatus) timeUntilEndOfPeriod(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
 	// 											converts from seconds to milliseconds
-	endOfPeriod := r.firstSustainedRequest + (host.sustainedTimePeriod * 1000)
+	endOfPeriod := r.firstRequest + (host.timePeriod * 1000)
 
 	return endOfPeriod - currentTime
 }
 
-//timeUntilEndOfBurst calculates the time in milliseconds until the end of the burst period
-func (r *RequestsStatus) timeUntilEndOfBurst(currentTime int64, host RateLimitConfig) (millisecondsToWait int64) {
-	//  								converts from seconds to milliseconds
-	endOfPeriod := r.firstBurstRequest + (host.burstTimePeriod * 1000)
+//hasEnoughTimePassed determines if the time between the last request and the present is greater
+//than the minimum time between requests
+func (r *RequestsStatus) hasEnoughTimePassed(currentTime int64, config RateLimitConfig) bool {
+	totalRequests := r.requests + r.pendingRequests
+	nextRequestTime := (int64(totalRequests) * config.timeBetweenRequests) + r.firstRequest
 
-	return endOfPeriod - currentTime
+	return currentTime-nextRequestTime >= 0
+}
+
+//timeUntilPeriodBetweenRequestsEnds calculates the time in milliseconds until enough time has passed between requests
+//so that it will be greater than the minimum time between requests of the host config
+func (r *RequestsStatus) timeUntilPeriodBetweenRequestsEnds(currentTime int64, config RateLimitConfig) int64 {
+	totalRequests := r.requests + r.pendingRequests
+	nextTime := (int64(totalRequests) * config.timeBetweenRequests) + r.firstRequest
+	return nextTime - currentTime
 }
 
 //GetUnixTimeMilliseconds returns the current UTC time in milliseconds
@@ -161,38 +131,6 @@ func getUnixTimeMilliseconds() int64 {
 	return time.Now().UTC().UnixNano() / int64(time.Millisecond)
 }
 
-func newRequestsStatus(sustainedRequests int, burstRequests int, pending int, firstSustainedRequests int64, firstBurstRequest int64) RequestsStatus {
-	return RequestsStatus{sustainedRequests, burstRequests, pending, firstSustainedRequests, firstBurstRequest}
-}
-
-func (r *RequestsStatus) incrementSustainedRequests(increment int) {
-	r.sustainedRequests += increment
-}
-
-func (r *RequestsStatus) setSustainedRequests(value int) {
-	r.sustainedRequests = value
-}
-
-func (r *RequestsStatus) incrementBurstRequests(increment int) {
-	r.burstRequests += increment
-}
-
-func (r *RequestsStatus) setBurstRequests(value int) {
-	r.burstRequests = value
-}
-
-func (r *RequestsStatus) incrementPendingRequests(increment int) {
-	r.pendingRequests += increment
-}
-
-func (r *RequestsStatus) decrementPendingRequests(increment int) {
-	r.pendingRequests -= increment
-}
-
-func (r *RequestsStatus) setFirstSustainedRequest(value int64) {
-	r.firstSustainedRequest = value
-}
-
-func (r *RequestsStatus) setFirstBurstRequest(value int64) {
-	r.firstBurstRequest = value
+func newRequestsStatus(requests int, pending int, firstRequest int64, lastErrorTime int64) RequestsStatus {
+	return RequestsStatus{requests, pending, firstRequest, lastErrorTime}
 }
