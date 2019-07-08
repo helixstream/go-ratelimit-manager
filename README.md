@@ -28,12 +28,13 @@ config = NewRateLimitConfig(
 	    1,    //length of the burst period in seconds
 	)
 ```
-If a host only has one posted rate limit, enter the one rate limit for both the sustained and burst
-Entering a 0 for the time period or number of requests will result in the rate being considered an 
+
+If a host only has one posted rate limit, enter the same rate limit for both the sustained and burst
+limits. Entering a 0 for the time period or number of requests will result in the rate being considered an 
 infinite rate. The library will ignore this rate and only use the non-infinite rate.
 
 ## Limiter
-The `Limiter` struct contains the main functionality of the library. 
+The `Limiter` struct contains the main functionality of determining whether a request can me made.
 
 The NewLimiter function requires a RateLimitConfig struct and a [Radix pool](https://godoc.org/github.com/mediocregopher/radix).
 ```go
@@ -48,7 +49,7 @@ if err != nil {
 }
 ```
 
-### Can Make Request
+#### Can Make Request
 CanMakeRequest returns bool, int64. If a request can be made it returns: true, 0. 
 If a request cannot be made it returns: false, and the time in milliseconds the program should wait
 before making another request
@@ -57,8 +58,10 @@ canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
 ```
 The requestWeight represents how much a request counts against the rate limit.
 In most cases the requestWeight is 1.
-### Full Example
-
+#### Full Example
+To coordinate requests to the same api across multiple threads/containers, it is imperative that each
+`Limiter` is initialized with a `RateLimitConfig` with the same host name. In addition the radix pool
+must be connected to the same redis database.  
 
 ```go
 canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
