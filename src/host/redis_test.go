@@ -124,6 +124,7 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string, url st
 			fmt.Print(".")
 
 		} else if sleepTime != 0 {
+			//fmt.Printf("Sleep time %v \n", sleepTime)
 			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}

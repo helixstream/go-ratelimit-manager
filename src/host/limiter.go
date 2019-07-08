@@ -24,8 +24,6 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 	statusKey := limiter.getStatusKey()
 	configKey := limiter.getConfigKey()
 
-
-
 	err := pool.Do(radix.WithConn(statusKey, func(c radix.Conn) error {
 		//must be done before the multi call
 		doesStatusExist, err := limiter.doesHashKeyExist(c, statusKey)
@@ -58,7 +56,7 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 				requests, 0,
 				pendingRequests, 0,
 				firstRequest, 0,
-				lastErrorTime, limiter.status.lastErrorTime,
+				lastErrorTime, 1, //set to one so a new limiter will update config on first CanMakeRequest
 			))
 
 			if err != nil {
@@ -95,7 +93,7 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 }
 
 //RequestSuccessful should be called when a request has been completed and returned without a 429 or 419 status code
-func (l *Limiter) RequestSuccessful(requestWeight int) error{
+func (l *Limiter) RequestSuccessful(requestWeight int) error {
 	key := l.getStatusKey()
 
 	err := l.pool.Do(radix.WithConn(key, func(c radix.Conn) error {
@@ -248,12 +246,16 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 			return err
 		}
 
+		lastError := l.status.lastErrorTime
+
 		if err := l.status.updateStatusFromDatabase(c, statusKey); err != nil {
 			return err
 		}
-
-		if err := l.config.updateConfigFromDatabase(c, configKey); err != nil {
-			return err
+		//only updates config from database when the lastErrorTime changes
+		if lastError != l.status.lastErrorTime {
+			if err := l.config.updateConfigFromDatabase(c, configKey); err != nil {
+				return err
+			}
 		}
 
 		canMake, wait = l.status.canMakeRequestLogic(requestWeight, l.config)
@@ -308,7 +310,10 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 	//resp is the response to the EXEC command
 	//if resp is nil the transaction was aborted
 	if resp == nil {
-		return false, 0
+		if wait == 0 {
+			return l.CanMakeRequest(requestWeight)
+		}
+		return false, wait
 	}
 
 	return canMake, wait

@@ -1,6 +1,5 @@
 # go-ratelimit-manager [![CircleCI](https://circleci.com/gh/helixstream/go-ratelimit-manager/tree/master.svg?style=shield&circle-token=302f5e13f102055def2bbe0f893845ed509e3340)](https://circleci.com/gh/helixstream/go-ratelimit-manager/tree/master)
 
-
 ## Motivations
 We needed a way to coordinate concurrent requests to web APIs so that we would not hit their
 rate limits. In addition the posted rate limits on some web APIs differ from how the rate limits
@@ -20,7 +19,7 @@ The `RateLimitConfig` struct contains the relevant rate limit information for a 
 
 How to create a new RateLimitConfig:
 ```go
-config = NewRateLimitConfig(
+config := NewRateLimitConfig(
 	    "myExampleHostName",  
 	    1200, //number of requests allowed in the sustained period
 	    60,   //length of the sustained period in seconds
@@ -38,7 +37,7 @@ The `Limiter` struct contains the main functionality of determining whether a re
 
 The NewLimiter function requires a RateLimitConfig struct and a [Radix pool](https://godoc.org/github.com/mediocregopher/radix/#Pool).
 ```go
-pool, err = radix.NewPool("tcp", "127.0.0.1:6379", 100)
+pool, err := radix.NewPool("tcp", "127.0.0.1:6379", 100)
 if err != nil {
     //handle error
 }
@@ -70,7 +69,7 @@ if canMake {
     //make some api request
     statusCode, err := makeApiRequest(url)
     if err != nil {
-        //if the request did not occur in it is imperative to call RequestCancelled()
+        //if the request did not occur, it is imperative to call RequestCancelled()
         err := limiter.RequestCancelled(requestWeight)
         if err != nil {
             //handle error
@@ -88,7 +87,6 @@ if canMake {
         if err != nil {
             //handle error
         }
-    
     }
 
 } else if sleepTime != 0 {

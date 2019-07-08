@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	sus                = 600
+	sus                = 1200
 	susPeriod    int64 = 60
-	burst              = 10
+	burst              = 20
 	burstPeriod  int64 = 1
-	serverConfig       = NewRateLimitConfig("localHost7", sus, int64(susPeriod), burst, int64(burstPeriod))
+	serverConfig       = NewRateLimitConfig("localHost9", sus, int64(susPeriod), burst, int64(burstPeriod))
 
 	//bucket/token rate limit
 	sustainedDuration = rate.Limit(float64(sus) / float64(susPeriod))
