@@ -22,10 +22,6 @@ const (
 
 func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) RateLimitConfig {
 	rl := RateLimitConfig{host, 0, 0, 0}
-	//if any of these are 0 the effective rate is infinite
-	if sustainedRequestLimit == 0 && sustainedTimePeriod == 0 && burstRequestLimit == 0 && burstTimePeriod == 0 {
-		return rl
-	}
 
 	rl.requestLimit, rl.timePeriod = determineLowerRate(sustainedRequestLimit, sustainedTimePeriod, burstRequestLimit, burstTimePeriod)
 
@@ -39,7 +35,6 @@ func determineLowerRate(sustainedRequestLimit int, sustainedTimePeriod int64, bu
 	if (sustainedRequestLimit == 0 || sustainedTimePeriod == 0) && (burstRequestLimit == 0 || burstTimePeriod == 0) {
 		//both infinite rates
 		return 0, 0
-
 	} else if sustainedRequestLimit == 0 || sustainedTimePeriod == 0 {
 		//sustained is an infinite rate
 		limit, time := reduceFraction(int64(burstRequestLimit), burstTimePeriod)
