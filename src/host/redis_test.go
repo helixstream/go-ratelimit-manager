@@ -105,7 +105,7 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string, url st
 				}
 
 			} else if statusCode == 200 {
-				if err := limiter.RequestFinished(requestWeight); err != nil {
+				if err := limiter.RequestSuccessful(requestWeight); err != nil {
 					t.Errorf("Error on Request Finished: %v. ", err)
 				}
 				numOfRequests -= requestWeight
@@ -114,19 +114,17 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string, url st
 					t.Errorf("Multiple 429s too close together \n")
 				}
 
-				if err := limiter.AdjustConfig(requestWeight); err != nil {
-					t.Errorf("Error on Adjust Config: %v. ", err)
+				if err := limiter.HitRateLimit(requestWeight); err != nil {
+					t.Errorf("Error on HitRateLimit: %v. ", err)
 				}
 
-				if err := limiter.RequestFinished(requestWeight); err != nil {
-					t.Errorf("Error on Request Finished: %v. ", err)
-				}
 				fmt.Printf("Routine: %v. %v. %v, %v \n", id, statusCode, limiter.status, limiter.config)
 			}
 
 			fmt.Print(".")
 
 		} else if sleepTime != 0 {
+			//fmt.Printf("Sleep time %v \n", sleepTime)
 			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
 	}
@@ -264,7 +262,7 @@ func Test_RequestFinished(t *testing.T) {
 				return err
 			}
 
-			if err := l.RequestFinished(testCases[i].requestWeight); err != nil {
+			if err := l.RequestSuccessful(testCases[i].requestWeight); err != nil {
 				t.Error(err)
 			}
 

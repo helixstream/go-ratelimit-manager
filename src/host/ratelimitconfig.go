@@ -22,30 +22,24 @@ const (
 
 func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) RateLimitConfig {
 	rl := RateLimitConfig{host, 0, 0, 0}
-	//if any of these are 0 the effective rate is infinite
-	if sustainedRequestLimit == 0 && sustainedTimePeriod == 0 && burstRequestLimit == 0 && burstTimePeriod == 0 {
-		return rl
-	}
 
 	rl.requestLimit, rl.timePeriod = determineLowerRate(sustainedRequestLimit, sustainedTimePeriod, burstRequestLimit, burstTimePeriod)
-
 	rl.setTimeBetweenRequests()
 
 	return rl
 }
 
 func determineLowerRate(sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) (int, int64) {
-
 	if (sustainedRequestLimit == 0 || sustainedTimePeriod == 0) && (burstRequestLimit == 0 || burstTimePeriod == 0) {
 		//both infinite rates
 		return 0, 0
-
-	} else if sustainedRequestLimit == 0 || sustainedTimePeriod == 0 {
+	}
+	if sustainedRequestLimit == 0 || sustainedTimePeriod == 0 {
 		//sustained is an infinite rate
 		limit, time := reduceFraction(int64(burstRequestLimit), burstTimePeriod)
 		return int(limit), time
-
-	} else if burstRequestLimit == 0 || burstTimePeriod == 0 {
+	}
+	if burstRequestLimit == 0 || burstTimePeriod == 0 {
 		//burst is an infinite rate
 		limit, time := reduceFraction(int64(sustainedRequestLimit), sustainedTimePeriod)
 		return int(limit), time
@@ -54,26 +48,22 @@ func determineLowerRate(sustainedRequestLimit int, sustainedTimePeriod int64, bu
 	if burstRequestLimit*int(sustainedTimePeriod) > sustainedRequestLimit*int(burstTimePeriod) {
 		//sustained is the lower rate
 		lim, period := reduceFraction(int64(sustainedRequestLimit), sustainedTimePeriod)
-
-		return int(lim), period
-	} else {
-		//burst is the lower rate or they are equal
-		lim, period := reduceFraction(int64(burstRequestLimit), burstTimePeriod)
-
 		return int(lim), period
 	}
+
+	//burst is the lower rate or they are equal
+	lim, period := reduceFraction(int64(burstRequestLimit), burstTimePeriod)
+
+	return int(lim), period
 }
 
 func (rl *RateLimitConfig) setTimeBetweenRequests() {
 	//requests per second
-	var time int64
-
 	if rl.requestLimit == 0 {
 		return
 	}
 
-	time = rl.timePeriod * 1000
-
+	time := rl.timePeriod * 1000
 	rl.timeBetweenRequests = time / int64(rl.requestLimit)
 }
 
@@ -111,8 +101,5 @@ func gcd(a int64, b int64) int64 {
 
 func reduceFraction(numerator int64, denominator int64) (int64, int64) {
 	gcd := gcd(numerator, denominator)
-	numerator /= gcd
-	denominator /= gcd
-
-	return numerator, denominator
+	return numerator/gcd, denominator/gcd
 }
