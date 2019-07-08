@@ -3,7 +3,7 @@
 
 ## Motivations
 We needed a way to coordinate concurrent requests to web APIs so that we would not hit their
-rate limits. In addition the posted rate limits on some web APIs differ from from how the rate limits
+rate limits. In addition the posted rate limits on some web APIs differ from how the rate limits
 actually operate. 
 
 By using redis to keep track of requests, this library allows you to respect the rate limits 
@@ -36,7 +36,7 @@ infinite rate. The library will ignore this rate and only use the non-infinite r
 ## Limiter
 The `Limiter` struct contains the main functionality of determining whether a request can me made.
 
-The NewLimiter function requires a RateLimitConfig struct and a [Radix pool](https://godoc.org/github.com/mediocregopher/radix).
+The NewLimiter function requires a RateLimitConfig struct and a [Radix pool](https://godoc.org/github.com/mediocregopher/radix/#Pool).
 ```go
 pool, err = radix.NewPool("tcp", "127.0.0.1:6379", 100)
 if err != nil {
@@ -50,9 +50,9 @@ if err != nil {
 ```
 
 #### Can Make Request
-CanMakeRequest returns bool, int64. If a request can be made it returns true, 0. 
+`CanMakeRequest` returns bool, int64. If a request can be made it returns true, 0. 
 If a request cannot be made it returns false, and the time in milliseconds the program should 
-wait before making another request
+wait before calling `CanMakeRequest` again
 ```go
 canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
 ```
