@@ -21,14 +21,28 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 		pool,
 	}
 
-	key := limiter.getStatusKey()
+	statusKey := limiter.getStatusKey()
+	configKey := limiter.getConfigKey()
 
-	err := pool.Do(radix.WithConn(key, func(c radix.Conn) error {
+
+
+	err := pool.Do(radix.WithConn(statusKey, func(c radix.Conn) error {
+		//must be done before the multi call
+		doesStatusExist, err := limiter.doesHashKeyExist(c, statusKey)
+		if err != nil {
+			return err
+		}
+
+		doesConfigExist, err := limiter.doesHashKeyExist(c, statusKey)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Does exist: %v, %v.", doesConfigExist, doesStatusExist)
+
 		if err := c.Do(radix.Cmd(nil, "MULTI")); err != nil {
 			return err
 		}
 
-		var err error
 		defer func() {
 			if err != nil {
 				// The return from DISCARD doesn't matter. If it's an error then
@@ -38,27 +52,33 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 			}
 		}()
 
-		err = c.Do(radix.FlatCmd(nil, "HSET",
-			limiter.getStatusKey(),
-			requests, 0,
-			pendingRequests, 0,
-			firstRequest, 0,
-			lastErrorTime, limiter.status.lastErrorTime,
-		))
+		if !doesStatusExist {
+			//if the status key does not exist save the current status to the database
+			err = c.Do(radix.FlatCmd(nil, "HSET",
+				statusKey,
+				requests, 0,
+				pendingRequests, 0,
+				firstRequest, 0,
+				lastErrorTime, limiter.status.lastErrorTime,
+			))
 
-		if err != nil {
-			return err
+			if err != nil {
+				return err
+			}
 		}
 
-		err = c.Do(radix.FlatCmd(nil, "HSET",
-			limiter.getConfigKey(),
-			limit, config.requestLimit,
-			timePeriod, config.timePeriod,
-			timeBetweenRequests, config.timeBetweenRequests,
-		))
+		if !doesConfigExist {
+			//if the config key does not exist, save the current config to the database
+			err = c.Do(radix.FlatCmd(nil, "HSET",
+				configKey,
+				limit, config.requestLimit,
+				timePeriod, config.timePeriod,
+				timeBetweenRequests, config.timeBetweenRequests,
+			))
 
-		if err != nil {
-			return err
+			if err != nil {
+				return err
+			}
 		}
 
 		if err = c.Do(radix.Cmd(nil, "EXEC")); err != nil {
@@ -69,7 +89,7 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 	}))
 
 	if err != nil {
-		return Limiter{}, nil
+		return Limiter{}, err
 	}
 
 	return limiter, nil
@@ -336,4 +356,17 @@ func (l *Limiter) getStatusKey() string {
 
 func (l *Limiter) getConfigKey() string {
 	return "config:" + l.config.host
+}
+
+func (l *Limiter) doesHashKeyExist(c radix.Conn, key string) (bool, error) {
+	var length int
+	if err := c.Do(radix.Cmd(&length, "HLEN", key)); err != nil {
+		return false, err
+	}
+
+	if length == 0 {
+		return false, nil
+	}
+
+	return true, nil
 }

@@ -13,7 +13,7 @@ var (
 	susPeriod    int64 = 60
 	burst              = 10
 	burstPeriod  int64 = 1
-	serverConfig       = NewRateLimitConfig("localHost4", sus, int64(susPeriod), burst, int64(burstPeriod))
+	serverConfig       = NewRateLimitConfig("localHost7", sus, int64(susPeriod), burst, int64(burstPeriod))
 
 	//bucket/token rate limit
 	sustainedDuration = rate.Limit(float64(sus) / float64(susPeriod))
