@@ -13,6 +13,8 @@ install:
   - go get -v -t -d ./...
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
+  - go get golang.org/x/tools/cmd/goimports
+  - go get -u golang.org/x/lint/golint
 
 script:
   - ./go-quality-check.bash

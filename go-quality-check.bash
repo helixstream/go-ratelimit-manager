@@ -44,6 +44,6 @@ if ${VETERRORS}; then
 fi
 
 if ${IMPORTERRORS}; then
-    echo "go fmt failed. See above errors"
+    echo "go import failed. See above errors"
     exit 1
 fi
