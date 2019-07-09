@@ -21,6 +21,11 @@ gofmt -w ./..
 LINTERRORS=false
 VETERRORS=false
 
+go vet ./...
+if [[ $? != 0 ]]; then
+    VETERRORS=true
+fi
+
 for FILE in ${gofiles}
 do
     goimports -w "${FILE}"
@@ -29,13 +34,17 @@ do
         LINTERRORS=true
     fi
 
+    #PROBLEM: vets single file at a time so it thinks that the RequestStatus and RateLimitConfig structs are undefined
+    #in limiter.go. The project needs to be vetted together to prevent this
     # vet everything except test files
-    if ! [[ "${FILE}" == *"_test.go"* ]]; then
-        go vet "${FILE}"
-        if [[ $? != 0 ]]; then
-            VETERRORS=true
-        fi
-    fi
+    #if ! [[ "${FILE}" == *"_test.go"* ]]; then
+    #    go vet "${FILE}"
+    #    if [[ $? != 0 ]]; then
+    #        VETERRORS=true
+    #    fi
+    #fi
+
+    git add ${FILE}
 done
 
 if ${LINTERRORS}; then

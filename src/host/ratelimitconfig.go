@@ -101,5 +101,5 @@ func gcd(a int64, b int64) int64 {
 
 func reduceFraction(numerator int64, denominator int64) (int64, int64) {
 	gcd := gcd(numerator, denominator)
-	return numerator/gcd, denominator/gcd
+	return numerator / gcd, denominator / gcd
 }

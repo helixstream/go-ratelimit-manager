@@ -28,11 +28,11 @@ for hook in "${CUSTOM_HOOKS_DIR}"/${hookname}-*; do
 done
 
 # check if there was a local hook that was moved previously
-if [[ -f "$NATIVE_HOOKS_DIR/$hookname.local" ]]; then
-    out=`${NATIVE_HOOKS_DIR}/${hookname}.local "$@"`
-    exitcodes+=($?)
-    echo "$out"
-fi
+#if [[ -f "$NATIVE_HOOKS_DIR/$hookname.local" ]]; then
+#    out=`${NATIVE_HOOKS_DIR}/${hookname}.local "$@"`
+#    exitcodes+=($?)
+#    echo "$out"
+#fi
 
 # If any exit code isn't 0, bail.
 for i in "${exitcodes[@]}"; do
