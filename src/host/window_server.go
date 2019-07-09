@@ -12,9 +12,9 @@ var (
 	windowSustainedDuration = time.Minute
 	windowBurstDuration     = time.Second
 
-	windowSustainedLimiter = NewRateLimiter(sus, windowSustainedDuration)
-	windowBurstLimiter     = NewRateLimiter(burst, windowBurstDuration)
-	windowBannedLimiter    = NewRateLimiter(10, 60)
+	windowSustainedLimiter = newRateLimiter(sus, windowSustainedDuration)
+	windowBurstLimiter     = newRateLimiter(burst, windowBurstDuration)
+	windowBannedLimiter    = newRateLimiter(10, 60)
 
 	windowPort = "8080"
 )
@@ -30,9 +30,9 @@ func serveWindowHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if windowSustainedLimiter.Allow(weight) && windowBurstLimiter.Allow(weight) {
+	if windowSustainedLimiter.allow(weight) && windowBurstLimiter.allow(weight) {
 		w.WriteHeader(200)
-	} else if windowBannedLimiter.Allow(weight) {
+	} else if windowBannedLimiter.allow(weight) {
 		http.Error(w, "Too many requests", 429)
 	} else {
 		http.Error(w, "Banned for too many requests", 419)
@@ -56,7 +56,7 @@ func getWindowServer() *http.Server {
 
 //rate limiting code taken from https://github.com/vitessio/vitess/blob/master/go/ratelimiter/ratelimiter.go#L30
 //modified to allow different request weights
-type RateLimiter struct {
+type rateLimiter struct {
 	maxCount int
 	interval time.Duration
 
@@ -65,8 +65,8 @@ type RateLimiter struct {
 	lastTime time.Time
 }
 
-func NewRateLimiter(maxCount int, interval time.Duration) *RateLimiter {
-	return &RateLimiter{
+func newRateLimiter(maxCount int, interval time.Duration) *rateLimiter {
+	return &rateLimiter{
 		maxCount: maxCount,
 		interval: interval,
 	}
@@ -74,7 +74,7 @@ func NewRateLimiter(maxCount int, interval time.Duration) *RateLimiter {
 
 // Allow returns true if a request is within the rate limit norms.
 // Otherwise, it returns false.
-func (rl *RateLimiter) Allow(weight int) bool {
+func (rl *rateLimiter) allow(weight int) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	if time.Since(rl.lastTime) < rl.interval {

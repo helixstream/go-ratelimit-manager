@@ -3,14 +3,15 @@ package host
 import (
 	"context"
 	"fmt"
-	"github.com/go-test/deep"
-	"github.com/mediocregopher/radix"
 	"math/rand"
 	"net/http"
 	url2 "net/url"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/go-test/deep"
+	"github.com/mediocregopher/radix"
 )
 
 //pool of connections to redis database

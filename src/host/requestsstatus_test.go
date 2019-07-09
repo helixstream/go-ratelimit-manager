@@ -1,8 +1,9 @@
 package host
 
 import (
-	"github.com/go-test/deep"
 	"testing"
+
+	"github.com/go-test/deep"
 )
 
 func Test_CanMakeRequestLogic(t *testing.T) {

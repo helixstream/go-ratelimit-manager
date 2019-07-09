@@ -2,12 +2,13 @@ package host
 
 import (
 	"fmt"
-	"github.com/mediocregopher/radix"
 	"strconv"
 	"time"
+
+	"github.com/mediocregopher/radix"
 )
 
-//requestsStatus struct contains all info pertaining to the cumulative requests made to a specific host
+//RequestsStatus struct contains all info pertaining to the cumulative requests made to a specific host
 type RequestsStatus struct {
 	requests        int //total number of completed requests made during the current sustained period
 	pendingRequests int //number of requests that have started but have not completed

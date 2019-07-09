@@ -1,11 +1,12 @@
 package host
 
 import (
-	"golang.org/x/time/rate"
 	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 var (
