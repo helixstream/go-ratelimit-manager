@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+
 	"github.com/mediocregopher/radix"
 )
 
@@ -350,6 +351,9 @@ func (l *Limiter) adjustConfig(requestWeight int, c radix.Conn) error {
 	return nil
 }
 
+//GetStatus returns the status of the requests, which includes the number on requests made in the period,
+//the number of pending requests, the timestamp of the beginning of the period, and the
+//timestamp for when the last error occurred.
 func (l *Limiter) GetStatus() RequestsStatus {
 	return l.status
 }

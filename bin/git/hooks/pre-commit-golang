@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# This is a git commit-hook which will run the following tools against
+# any .go files in your repository:
+# - gofmt
+# - goimports
+# - golint
+# - go vet
+#
+# This script is meant to be added as a "pre-commit"-hook. See this
+#  page for further information:
+#   https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks
+#
+#
+
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$')
+[[ -z "$gofiles" ]] && exit 0
+
+gofmt -w ./..
+
+LINTERRORS=false
+VETERRORS=false
+
+go vet ./...
+if [[ $? != 0 ]]; then
+    VETERRORS=true
+fi
+
+for FILE in ${gofiles}
+do
+    goimports -w "${FILE}"
+    golint "-set_exit_status" "${FILE}"
+    if [[ $? == 1 ]]; then
+        LINTERRORS=true
+    fi
+
+    #PROBLEM: vets single file at a time so it thinks that the RequestStatus and RateLimitConfig structs are undefined
+    #in limiter.go. The project needs to be vetted together to prevent this
+    # vet everything except test files
+    #if ! [[ "${FILE}" == *"_test.go"* ]]; then
+    #    go vet "${FILE}"
+    #    if [[ $? != 0 ]]; then
+    #        VETERRORS=true
+    #    fi
+    #fi
+
+done
+
+if ${LINTERRORS}; then
+    echo "golint failed. See above errors"
+    exit 1
+fi
+
+if ${VETERRORS}; then
+    echo "go vet failed. See above errors"
+    exit 1
+fi
+
+
+

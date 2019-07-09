@@ -2,8 +2,9 @@ package host
 
 import (
 	"fmt"
-	"github.com/mediocregopher/radix"
 	"strconv"
+
+	"github.com/mediocregopher/radix"
 )
 
 //RateLimitConfig struct contains the rate limit information for a specific host
@@ -20,6 +21,7 @@ const (
 	timeBetweenRequests = "timeBetween"
 )
 
+//NewRateLimitConfig creates a rate limit config for the limiter struct based on the sustained rate and burst rate in requests per second
 func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) RateLimitConfig {
 	rl := RateLimitConfig{host, 0, 0, 0}
 
@@ -101,5 +103,5 @@ func gcd(a int64, b int64) int64 {
 
 func reduceFraction(numerator int64, denominator int64) (int64, int64) {
 	gcd := gcd(numerator, denominator)
-	return numerator/gcd, denominator/gcd
+	return numerator / gcd, denominator / gcd
 }

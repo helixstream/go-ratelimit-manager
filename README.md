@@ -1,4 +1,5 @@
-# go-ratelimit-manager [![CircleCI](https://circleci.com/gh/helixstream/go-ratelimit-manager/tree/master.svg?style=shield&circle-token=302f5e13f102055def2bbe0f893845ed509e3340)](https://circleci.com/gh/helixstream/go-ratelimit-manager/tree/master)
+# go-ratelimit-manager [![Documentation](https://godoc.org/github.com/helixstream/go-ratelimit-manager/src/host?status.svg)](http://godoc.org/github.com/helixstream/go-ratelimit-manager/src/host) [![Build Status](https://travis-ci.org/helixstream/go-ratelimit-manager.svg?branch=master)](https://travis-ci.org/helixstream/go-ratelimit-manager) [![Coverage Status](https://coveralls.io/repos/github/helixstream/go-ratelimit-manager/badge.svg?branch=master)](https://coveralls.io/github/helixstream/go-ratelimit-manager?branch=master)
+
 
 ## Motivations
 We needed a way to coordinate concurrent requests to web APIs so that we would not hit their

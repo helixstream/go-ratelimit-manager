@@ -1,0 +1,25 @@
+language: go
+
+go:
+  - "1.12"
+
+notifications:
+  email: false
+
+services:
+  - redis-server
+
+install:
+  - go get -v -t -d ./...
+  - go get golang.org/x/tools/cmd/cover
+  - go get github.com/mattn/goveralls
+  - go get golang.org/x/tools/cmd/goimports
+  - go get -u golang.org/x/lint/golint
+
+script:
+  - ./go-quality-check.bash
+  - go test -v -covermode=count -coverprofile=coverage.out ./...
+  - $(go env GOPATH | awk 'BEGIN{FS=":"} {print $1}')/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
+
+env:
+  secure: "T3Yib+v+plLWgbRI5D1RUtFsUe7Fi6PJgkWbOVLduAgOVB4coYH2GDer7QfQXRJyoPQCBfnyeYaITDjc0Dk3Zi/k6AusXk0yvsKZ6Gj6zvixlBWSsk4QaNUg+rd8hGm0KtUu2z6wtoXTFrGSFw9F7+CYgcyh762oBQKCepSDHU94gCY60lccsDYJv2/TIrCRdgizL4KKKfJV6fSm6i27kRUcqcaf7eyO5O6GkSdhVli2vOmA7Y+uymgg6OW5x6uiTjoDyGT9WpCpNIkFo9no+3RnfzmBSWP7t03QaTUWrQeX3P7yxaWPFuLhKP/Byppc6qe3nCk5qXxuzU1d/zTR1WkGQ28vz1tb1LPVuaHek2se3ES5VMEaSjmPqx5CNtCTvi2FXq+UQQkjmJLa48nqHODwygDtZ/oZXP1OveyKDieTC8TFEaSdmyTplBU8Pv0eE9OfyBoHAe2laX3RhXKyYsZ5Xu1s2Ih4AesafROSljtUFmnzKgCubd6PHzqQwPhTtLS0vTWIBd0HqoJGGj4ZKul/7Fqhl/Gt6CxGtHL8nIUvzePawpvqexqN6h7cbyhXcUKV3IiVa2gtCF8FmTE5ijCtlo35m6SLlZX3AOszmubsG8sCEr3D4yk93PD1ZNyV4gBsLrncqA4ne7+5Vsh5RchaszbnzgezBGLrpzMgoQ4="
