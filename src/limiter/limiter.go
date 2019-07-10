@@ -2,6 +2,7 @@ package limiter
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/mediocregopher/radix"
 )
@@ -330,6 +331,16 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 	}
 
 	return canMake, wait
+}
+
+//WaitForRatelimit blocks until a request can be made.
+func (l *Limiter) WaitForRatelimit(requestWeight int) {
+	canMake, sleepTime := l.CanMakeRequest(requestWeight)
+	if canMake {
+		return
+	}
+	time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+	l.WaitForRatelimit(requestWeight)
 }
 
 //adjustConfig reduces the number of allowed requests per time period by one and saves
