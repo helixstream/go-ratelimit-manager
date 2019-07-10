@@ -19,7 +19,7 @@ if [[ $? != 0 ]]; then
     VETERRORS=true
 fi
 
-for FILE in src/host/*.go;
+for FILE in src/limiter/*.go;
 do
     goimports -w "${FILE}"
     if [[ $? != 0 ]]; then
