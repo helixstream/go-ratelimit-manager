@@ -33,7 +33,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		weight = 1
 	}
 	//simulates random server errors
-	if rand.Intn(200) == 5 {
+	if rand.Intn(50) == 5 {
 		http.Error(w, "Internal Service Error", 500)
 		return
 	}

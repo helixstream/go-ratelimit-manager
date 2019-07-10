@@ -357,3 +357,40 @@ func ExampleLimiter_WaitForRatelimit() {
 		}
 	}
 }
+
+func Test_GetStatus(t *testing.T) {
+
+	testCases := []Limiter{
+		{
+			newRequestsStatus(10, 45, getUnixTimeMilliseconds(), 42350232),
+			NewRateLimitConfig("host1", 45, 3, 452, 4),
+			pool,
+		},
+		{
+			newRequestsStatus(52, 85, 23542636, 34534),
+			NewRateLimitConfig("host2", 25453, 2343, 234, 3243),
+			pool,
+		},
+		{
+			newRequestsStatus(0, 0, 0, 0),
+			NewRateLimitConfig("host3", 0, 0, 0, 0),
+			pool,
+		},
+		{
+			newRequestsStatus(1, 23, 324, 423362),
+			NewRateLimitConfig("host4", 23523, 324, 23, 1),
+			pool,
+		},
+		{
+			newRequestsStatus(120, 32, 455635435, 1246564566),
+			NewRateLimitConfig("host5", 1200, 60, 20, 10),
+			pool,
+		},
+	}
+
+	for i := 0; i < len(testCases); i++ {
+		if diff := deep.Equal(testCases[i].GetStatus(), testCases[i].status); diff != nil {
+			t.Error(diff)
+		}
+	}
+}

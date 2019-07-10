@@ -1,7 +1,6 @@
 package limiter
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/mediocregopher/radix"
@@ -91,11 +90,7 @@ func (rl *RateLimitConfig) updateConfigFromDatabase(c radix.Conn, key string) er
 
 	err := c.Do(radix.Cmd(&values, "HVALS", key))
 	if err != nil {
-		fmt.Print(err)
 		return err
-	}
-	if len(values) != 3 {
-		return nil
 	}
 
 	limit, _ := strconv.Atoi(values[0])

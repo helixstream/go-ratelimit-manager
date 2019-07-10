@@ -1,7 +1,6 @@
 package limiter
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/mediocregopher/radix"
@@ -52,9 +51,7 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 
 		defer func() {
 			if err != nil {
-				// The return from DISCARD doesn't matter. If it's an error then
-				// it's a network error and the Conn will be closed by the
-				// client.
+				//err doesn't matter. any error is a network err, so client will close conn.
 				c.Do(radix.Cmd(nil, "DISCARD"))
 			}
 		}()
@@ -118,9 +115,6 @@ func (l *Limiter) RequestSuccessful(requestWeight int) error {
 		var err error
 		defer func() {
 			if err != nil {
-				// The return from DISCARD doesn't matter. If it's an error then
-				// it's a network error and the Conn will be closed by the
-				// client.
 				c.Do(radix.Cmd(nil, "DISCARD"))
 			}
 		}()
@@ -160,9 +154,6 @@ func (l *Limiter) HitRateLimit(requestWeight int) error {
 		var err error
 		defer func() {
 			if err != nil {
-				// The return from DISCARD doesn't matter. If it's an error then
-				// it's a network error and the Conn will be closed by the
-				// client.
 				c.Do(radix.Cmd(nil, "DISCARD"))
 			}
 		}()
@@ -220,9 +211,6 @@ func (l *Limiter) RequestCancelled(requestWeight int) error {
 		var err error
 		defer func() {
 			if err != nil {
-				// The return from DISCARD doesn't matter. If it's an error then
-				// it's a network error and the Conn will be closed by the
-				// client.
 				c.Do(radix.Cmd(nil, "DISCARD"))
 			}
 		}()
@@ -293,9 +281,6 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 		var err error
 		defer func() {
 			if err != nil {
-				// The return from DISCARD doesn't matter. If it's an error then
-				// it's a network error and the Conn will be closed by the
-				// client.
 				c.Do(radix.Cmd(nil, "DISCARD"))
 			}
 		}()
@@ -318,7 +303,6 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 		return nil
 	}))
 	if err != nil {
-		fmt.Printf("Error: %v. ", err)
 		return false, wait
 	}
 	//resp is the response to the EXEC command
@@ -333,7 +317,9 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 	return canMake, wait
 }
 
-//WaitForRatelimit blocks until a request can be made.
+//WaitForRatelimit recursively calls CanMakeRequest until a request can be made.
+//It handles the sleeping when a request cannot be made and it blocks until
+//a request can be made.
 func (l *Limiter) WaitForRatelimit(requestWeight int) {
 	canMake, sleepTime := l.CanMakeRequest(requestWeight)
 	if canMake {
