@@ -7,7 +7,12 @@ import (
 	"github.com/mediocregopher/radix"
 )
 
-//RateLimitConfig struct contains the rate limit information for a specific host
+//RateLimitConfig struct contains the rate limit information for a specific api.
+//
+//If you want to coordinate requests to one api across multiple threads, routines, containers, etc,
+//it is imperative that each Limiter you create is initialized with a RateLimitConfig that has the same
+//host name otherwise the Limiter structs will not be able to communicate and you will definitely hit
+//the ratelimit.
 type RateLimitConfig struct {
 	host                string //may change to different data type later
 	requestLimit        int    //how many requests can be made in the given timePeriod
@@ -21,7 +26,19 @@ const (
 	timeBetweenRequests = "timeBetween"
 )
 
-//NewRateLimitConfig creates a rate limit config for the limiter struct based on the sustained rate and burst rate in requests per second
+//NewRateLimitConfig creates a rate limit config for a Limiter struct.
+//
+//If you want to coordinate requests to one api across multiple threads, routines, containers, etc,
+//it is imperative that each Limiter you create is initialized with a RateLimitConfig that has the same
+//host name otherwise the Limiter structs will not be able to communicate and you will definitely hit
+//the ratelimit
+//
+//NewRateLimitConfig takes in two rates: a sustained ratelimit and a burst ratelimit. If the api you are
+//making requests to only uses one ratelimit, enter in that rate for both the sustained and burst ratelimit.
+//
+//	config := NewRateLimitConfig("exampleHostName", 1200, 60, 20, 1)
+//The time periods of both rates are in terms of seconds so the config above has a sustained ratelimit of
+//1200 requests per 60 seconds and a burst ratelimit of 20 requests per second.
 func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) RateLimitConfig {
 	rl := RateLimitConfig{host, 0, 0, 0}
 

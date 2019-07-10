@@ -6,15 +6,23 @@ import (
 	"github.com/mediocregopher/radix"
 )
 
-//Limiter counts the number of requests made and keeps the number of
-//requests under the sustained and burst limits specified by the user
+//Limiter controls how often requests can be made. It uses a radix pool to connect
+//to your redis database and the web api's RateLimitConfig to keep the number of
+//allowed requests under the ratelimit.
+//
+//The request weight of any request is how much it counts against the ratelimit.
+//If an api's ratelimit allows 10 requests per second and a specific type of request
+//counts for two of the 10 allowed requests per second, the request weight is two.
+//However, in most cases the request weight is one.
 type Limiter struct {
 	status RequestsStatus
 	config RateLimitConfig
 	pool   *radix.Pool
 }
 
-//NewLimiter creates a new Limiter with a given radix pool and rate limit configuration
+//NewLimiter returns a new Limiter and requires a radix pool to allow the limiter
+//to connect to the redis database. It also requires a RateLimitConfig so it can
+//throttle requests to stay under the ratelimit while allowing as many requests as possible.
 func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 	limiter := Limiter{
 		newRequestsStatus(0, 0, 0, 0),
@@ -93,7 +101,8 @@ func NewLimiter(config RateLimitConfig, pool *radix.Pool) (Limiter, error) {
 	return limiter, nil
 }
 
-//RequestSuccessful should be called when a request has been completed and returned without a 429 or 419 status code
+//RequestSuccessful must be called only after CanMakeRequest returned true and
+//when a request has been completed and returned without a 429 or 419 status code
 func (l *Limiter) RequestSuccessful(requestWeight int) error {
 	key := l.getStatusKey()
 
@@ -133,7 +142,9 @@ func (l *Limiter) RequestSuccessful(requestWeight int) error {
 	return nil
 }
 
-//HitRateLimit should be called when a request has been completed and the status code is a 429 or 419
+//HitRateLimit must be called only after CanMakeRequest returned true and a request
+//has been completed with a status code of 429 or 419. This will automatically adjust
+//the RateLimitConfig in the Limiter struct to prevent more 429s in the future.
 func (l *Limiter) HitRateLimit(requestWeight int) error {
 	statusKey := l.getStatusKey()
 
@@ -177,8 +188,8 @@ func (l *Limiter) HitRateLimit(requestWeight int) error {
 	return nil
 }
 
-//requestFinished updates the RequestsStatus struct by removing a pending request into the sustained and burst categories
-//should be called directly after the request has finished
+//requestFinished updates the RequestsStatus struct by removing a pending request into the
+//sustained and burst categories should be called directly after the request has finished
 func (l *Limiter) requestFinished(requestWeight int, c radix.Conn, key string) error {
 	if err := c.Do(radix.FlatCmd(nil, "HINCRBY", key, requests, requestWeight)); err != nil {
 		return err
@@ -191,8 +202,8 @@ func (l *Limiter) requestFinished(requestWeight int, c radix.Conn, key string) e
 	return nil
 }
 
-//RequestCancelled updates the RequestStatus struct by removing a pending request as the request did not complete
-//and so does not could against the rate limit. Should be called directly after the request was cancelled/failed
+//RequestCancelled must be called if CanMakeRequest returned true, but the request
+//to the api was never actually made.
 func (l *Limiter) RequestCancelled(requestWeight int) error {
 	key := l.getStatusKey()
 	//this is radix's way of doing a transaction
@@ -233,8 +244,9 @@ func (l *Limiter) RequestCancelled(requestWeight int) error {
 	return nil
 }
 
-//CanMakeRequest communicates with the database to figure out when it is possible to make a request
-//returns true, 0 if a request can be made, and false and the amount of time to sleep when a request cannot be made
+//CanMakeRequest communicates with the database to figure out when it is possible to
+//make a request. If a request can be made it returns true, 0. If a request cannot be made
+//it returns false and the amount of time to sleep before your program should call CanMakeRequest again
 func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 	statusKey := l.getStatusKey()
 	configKey := l.getConfigKey()
@@ -320,8 +332,8 @@ func (l *Limiter) CanMakeRequest(requestWeight int) (bool, int64) {
 	return canMake, wait
 }
 
-//adjustConfig reduces the number of allowed requests per time period by one and saves the new config to the database
-//updates the lastErrorTime to the current time
+//adjustConfig reduces the number of allowed requests per time period by one and saves
+//the new config to the database updates the lastErrorTime to the current time
 func (l *Limiter) adjustConfig(requestWeight int, c radix.Conn) error {
 	l.config.requestLimit -= requestWeight
 	l.config.setTimeBetweenRequests()
@@ -351,9 +363,9 @@ func (l *Limiter) adjustConfig(requestWeight int, c radix.Conn) error {
 	return nil
 }
 
-//GetStatus returns the status of the requests, which includes the number on requests made in the period,
-//the number of pending requests, the timestamp of the beginning of the period, and the
-//timestamp for when the last error occurred.
+//GetStatus returns the status of the requests, which includes the number on requests
+//made in the period, the number of pending requests, the timestamp of the beginning
+//of the period, and the timestamp for when the last error occurred.
 func (l *Limiter) GetStatus() RequestsStatus {
 	return l.status
 }
