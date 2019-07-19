@@ -34,6 +34,10 @@ func (r *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 		return err
 	}
 
+	if len(values) != 4 {
+		return nil
+	}
+
 	requests, _ := strconv.Atoi(values[0])
 	pending, _ := strconv.Atoi(values[1])
 	first, _ := strconv.ParseInt(values[2], 10, 64)

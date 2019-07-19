@@ -93,6 +93,10 @@ func (rl *RateLimitConfig) updateConfigFromDatabase(c radix.Conn, key string) er
 		return err
 	}
 
+	if len(values) != 3 {
+		return nil
+	}
+
 	limit, _ := strconv.Atoi(values[0])
 	timePeriod, _ := strconv.ParseInt(values[1], 10, 64)
 	timeBetween, _ := strconv.ParseInt(values[2], 10, 64)
