@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-test/deep"
-	"github.com/mediocregopher/radix"
+	"github.com/mediocregopher/radix/v3"
 )
 
 //pool of connections to redis database

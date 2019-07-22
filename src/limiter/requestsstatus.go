@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mediocregopher/radix"
+	"github.com/mediocregopher/radix/v3"
 )
 
 //RequestsStatus struct contains all info pertaining to the cumulative requests made to a specific host
