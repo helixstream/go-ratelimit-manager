@@ -140,8 +140,9 @@ func (l *Limiter) RequestSuccessful(requestWeight int) error {
 //HitRateLimit must be called only after CanMakeRequest returned true and a request
 //has been completed with a status code of 429 or 419. This will automatically adjust
 //the RateLimitConfig in the Limiter struct to prevent more 429s in the future.
-
-func (l *Limiter) HitRateLimit(requestWeight int, wait ...int64) error {
+//The wait parameter is optional. It is the amount of time in milliseconds after HitRateLimit is
+//called that no requests will be allowed.
+func (l *Limiter) HitRateLimit(requestWeight int) error {
 
 	statusKey := l.getStatusKey()
 
@@ -164,11 +165,7 @@ func (l *Limiter) HitRateLimit(requestWeight int, wait ...int64) error {
 			return err
 		}
 
-		if len(wait) == 0 {
-			wait = append(wait, 0)
-		}
-
-		if err = l.adjustConfig(requestWeight, wait[0], c); err != nil {
+		if err = l.adjustConfig(requestWeight, c); err != nil {
 			return err
 		}
 
@@ -338,7 +335,7 @@ func (l *Limiter) WaitForRatelimit(requestWeight int) {
 //adjustConfig reduces the number of allowed requests per time period by one and saves
 //the new config to the database updates the lastErrorTime to the current time
 
-func (l *Limiter) adjustConfig(requestWeight int, wait int64, c radix.Conn) error {
+func (l *Limiter) adjustConfig(requestWeight int, c radix.Conn) error {
 	if l.config.requestLimit-requestWeight > 0 {
 		l.config.requestLimit -= requestWeight
 		l.config.setTimeBetweenRequests()
@@ -358,7 +355,7 @@ func (l *Limiter) adjustConfig(requestWeight int, wait int64, c radix.Conn) erro
 	}
 
 	err = c.Do(radix.FlatCmd(nil, "HSET", statusKey,
-		lastErrorTime, getUnixTimeMilliseconds()+wait+l.config.timePeriod*1000,
+		lastErrorTime, getUnixTimeMilliseconds(),
 	))
 
 	if err != nil {

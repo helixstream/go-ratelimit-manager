@@ -92,7 +92,7 @@ func (rl *RateLimitConfig) updateConfigFromDatabase(c radix.Conn, key string) er
 	if err != nil {
 		return err
 	}
-  
+
 	if len(values) != 3 {
 		return nil
 	}
