@@ -3,7 +3,7 @@ package limiter
 import (
 	"strconv"
 
-	"github.com/mediocregopher/radix"
+	"github.com/mediocregopher/radix/v3"
 )
 
 //RateLimitConfig struct contains the rate limit information for a specific api.

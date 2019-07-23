@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-test/deep"
-	"github.com/mediocregopher/radix"
+	"github.com/mediocregopher/radix/v3"
 )
 
 //pool of connections to redis database
@@ -119,7 +119,7 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string, url st
 				t.Errorf("Multiple 429s too close together \n")
 			}
 
-			if err := limiter.HitRateLimit(requestWeight); err != nil {
+			if err := limiter.HitRateLimit(requestWeight, 3000); err != nil {
 				t.Errorf("Error on HitRateLimit: %v. ", err)
 			}
 

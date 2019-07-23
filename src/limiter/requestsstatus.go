@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mediocregopher/radix"
+	"github.com/mediocregopher/radix/v3"
 )
 
 //RequestsStatus struct contains all info pertaining to the cumulative requests made to a specific host
@@ -54,7 +54,7 @@ func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 	now := getUnixTimeMilliseconds()
 
 	timeSinceLastError := now - r.lastErrorTime
-	if timeSinceLastError < config.timePeriod*1000 {
+	if timeSinceLastError < 0 {
 		return false, config.timePeriod - timeSinceLastError
 	}
 
