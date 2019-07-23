@@ -1,4 +1,4 @@
-module go-ratelimit-manager
+module github.com/helixstream/go-ratelimit-manager
 
 go 1.12
 
