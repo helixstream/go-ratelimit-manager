@@ -1,5 +1,4 @@
-# go-ratelimit-manager [![Documentation](https://godoc.org/github.com/helixstream/go-ratelimit-manager/src/limiter?status.svg)](http://godoc.org/github.com/helixstream/go-ratelimit-manager/src/limiter) [![Build Status](https://travis-ci.org/helixstream/go-ratelimit-manager.svg?branch=master)](https://travis-ci.org/helixstream/go-ratelimit-manager) [![Coverage Status](https://coveralls.io/repos/github/helixstream/go-ratelimit-manager/badge.svg?branch=master)](https://coveralls.io/github/helixstream/go-ratelimit-manager?branch=master)
-
+# go-ratelimit-manager [![Documentation](https://godoc.org/github.com/helixstream/go-ratelimit-manager/src/limiter?status.svg)](http://godoc.org/github.com/helixstream/go-ratelimit-manager/src/limiter) [![Build Status](https://travis-ci.org/helixstream/go-ratelimit-manager.svg?branch=master)](https://travis-ci.org/helixstream/go-ratelimit-manager) [![Coverage Status](https://coveralls.io/repos/github/helixstream/go-ratelimit-manager/badge.svg?branch=master)](https://coveralls.io/github/helixstream/go-ratelimit-manager?branch=master) [![Go Report Card](https://goreportcard.com/badge/github.com/helixstream/go-ratelimit-manager)](https://goreportcard.com/report/github.com/helixstream/go-ratelimit-manager) [![Go Report Card](https://goreportcard.com/badge/github.com/helixstream/go-ratelimit-manager)](https://goreportcard.com/report/github.com/helixstream/go-ratelimit-manager)
 
 ## Motivations
 We needed a way to coordinate concurrent requests to web APIs so that we would not hit their
@@ -63,6 +62,34 @@ To coordinate requests to the same api across multiple threads/containers, it is
 `Limiter` is initialized with a `RateLimitConfig` with the same host name. In addition the radix pool
 must be connected to the same redis database.  
 
+`WaitForRatelimit` recursively call `CanMakeRequest` until it is safe to make a request.
+
+```go
+limiter.WaitForRatelimit(requestWeight)
+//make some api request
+statusCode, err := makeApiRequest(url)
+if err != nil {
+    //if the request did not occur, it is imperative to call RequestCancelled()
+    err := limiter.RequestCancelled(requestWeight)
+    if err != nil {
+        //handle error
+    }
+}
+//if the request hit the rate limit
+if statusCode == 429 {
+    err := limiter.HitRateLimit(requestWeight)
+    if err != nil {
+        //handle error
+    }
+} else {
+    //if the request was successful and did not hit the rate limit
+    err := limiter.RequestSuccessful(requestWeight)
+    if err != nil {
+        //handle error
+    }
+}
+```
+#####or
 ```go
 canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
 //if a request can be made

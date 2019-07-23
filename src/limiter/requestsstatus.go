@@ -1,7 +1,6 @@
 package limiter
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -32,7 +31,6 @@ func (r *RequestsStatus) updateStatusFromDatabase(c radix.Conn, key string) erro
 	var values []string
 	err := c.Do(radix.Cmd(&values, "HVALS", key))
 	if err != nil {
-		fmt.Print(err)
 		return err
 	}
 
@@ -56,7 +54,7 @@ func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 	now := getUnixTimeMilliseconds()
 
 	timeSinceLastError := now - r.lastErrorTime
-	if timeSinceLastError < config.timePeriod*1000 {
+	if timeSinceLastError < 0 {
 		return false, config.timePeriod - timeSinceLastError
 	}
 
@@ -78,12 +76,8 @@ func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 	r.requests = 0
 	r.firstRequest = now
 
-	if r.hasEnoughTimePassed(now, config) {
-		r.pendingRequests += requestWeight
-		return true, 0
-	}
-
-	return false, r.timeUntilPeriodBetweenRequestsEnds(now, config)
+	r.pendingRequests += requestWeight
+	return true, 0
 }
 
 //isInPeriod checks if the current request falls in the time frame of the period
