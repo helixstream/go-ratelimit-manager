@@ -140,7 +140,8 @@ func (l *Limiter) RequestSuccessful(requestWeight int) error {
 //HitRateLimit must be called only after CanMakeRequest returned true and a request
 //has been completed with a status code of 429 or 419. This will automatically adjust
 //the RateLimitConfig in the Limiter struct to prevent more 429s in the future.
-
+//The wait parameter is optional. It is the amount of time in milliseconds after HitRateLimit is
+//called that no requests will be allowed.
 func (l *Limiter) HitRateLimit(requestWeight int, wait ...int64) error {
 
 	statusKey := l.getStatusKey()
