@@ -17,6 +17,7 @@ type RateLimitConfig struct {
 	requestLimit        int    //how many requests can be made in the given timePeriod
 	timePeriod          int64  //how long the period lasts in seconds
 	timeBetweenRequests int64  //is the minimum number of milliseconds between requests
+	waitAfterHitLimit   int64  //is the number of seconds after hitting a rate limit, where no requests will be approved
 }
 
 const (
@@ -38,8 +39,11 @@ const (
 //	config := NewRateLimitConfig("exampleHostName", 1200, 60, 20, 1)
 //The time periods of both rates are in terms of seconds so the config above has a sustained ratelimit of
 //1200 requests per 60 seconds and a burst ratelimit of 20 requests per second.
-func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64) RateLimitConfig {
-	rl := RateLimitConfig{host, 0, 0, 0}
+//
+//waitAfterHitLimit is the amount of time in milliseconds the limiter will wait before allowing more requests after
+//hitting the ratelimit.
+func NewRateLimitConfig(host string, sustainedRequestLimit int, sustainedTimePeriod int64, burstRequestLimit int, burstTimePeriod int64, waitAfterHitLimit int64) RateLimitConfig {
+	rl := RateLimitConfig{host, 0, 0, 0, waitAfterHitLimit}
 
 	rl.requestLimit, rl.timePeriod = determineLowerRate(sustainedRequestLimit, sustainedTimePeriod, burstRequestLimit, burstTimePeriod)
 	rl.setTimeBetweenRequests()
@@ -101,7 +105,7 @@ func (rl *RateLimitConfig) updateConfigFromDatabase(c radix.Conn, key string) er
 	timePeriod, _ := strconv.ParseInt(values[1], 10, 64)
 	timeBetween, _ := strconv.ParseInt(values[2], 10, 64)
 
-	*rl = RateLimitConfig{rl.host, limit, timePeriod, timeBetween}
+	*rl = RateLimitConfig{rl.host, limit, timePeriod, timeBetween, rl.waitAfterHitLimit}
 	return nil
 }
 

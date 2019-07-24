@@ -25,6 +25,7 @@ var (
 		susPeriod,
 		burst,
 		burstPeriod,
+		3,
 	)
 )
 
@@ -156,7 +157,7 @@ func Test_RequestCancelled(t *testing.T) {
 		expected      RequestsStatus
 	}
 
-	config := NewRateLimitConfig("testHost1", 0, 0, 0, 0)
+	config := NewRateLimitConfig("testHost1", 0, 0, 0, 0, 0)
 
 	testCases := []TestRequestStatus{
 		{
@@ -225,7 +226,7 @@ func Test_RequestFinished(t *testing.T) {
 		expected      RequestsStatus
 	}
 
-	config := NewRateLimitConfig("testHost1", 0, 0, 0, 0)
+	config := NewRateLimitConfig("testHost1", 0, 0, 0, 0, 0)
 
 	testCases := []TestRequestStatus{
 		{
@@ -284,7 +285,7 @@ func Test_RequestFinished(t *testing.T) {
 }
 
 func Test_updateStatusFromDatabase(t *testing.T) {
-	config := NewRateLimitConfig("testHost1", 1, 1, 1, 1)
+	config := NewRateLimitConfig("testHost1", 1, 1, 1, 1, 0)
 
 	testCases := []Limiter{
 		{newRequestsStatus(5, 2, 23564, 0), config, pool},
@@ -332,27 +333,27 @@ func Test_GetStatus(t *testing.T) {
 	testCases := []Limiter{
 		{
 			newRequestsStatus(10, 45, getUnixTimeMilliseconds(), 42350232),
-			NewRateLimitConfig("host1", 45, 3, 452, 4),
+			NewRateLimitConfig("host1", 45, 3, 452, 4, 0),
 			pool,
 		},
 		{
 			newRequestsStatus(52, 85, 23542636, 34534),
-			NewRateLimitConfig("host2", 25453, 2343, 234, 3243),
+			NewRateLimitConfig("host2", 25453, 2343, 234, 3243, 0),
 			pool,
 		},
 		{
 			newRequestsStatus(0, 0, 0, 0),
-			NewRateLimitConfig("host3", 0, 0, 0, 0),
+			NewRateLimitConfig("host3", 0, 0, 0, 0, 0),
 			pool,
 		},
 		{
 			newRequestsStatus(1, 23, 324, 423362),
-			NewRateLimitConfig("host4", 23523, 324, 23, 1),
+			NewRateLimitConfig("host4", 23523, 324, 23, 1, 0),
 			pool,
 		},
 		{
 			newRequestsStatus(120, 32, 455635435, 1246564566),
-			NewRateLimitConfig("host5", 1200, 60, 20, 10),
+			NewRateLimitConfig("host5", 1200, 60, 20, 10, 0),
 			pool,
 		},
 	}
