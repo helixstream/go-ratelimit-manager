@@ -14,7 +14,7 @@ var (
 
 	windowSustainedLimiter = newRateLimiter(sus, windowSustainedDuration)
 	windowBurstLimiter     = newRateLimiter(burst, windowBurstDuration)
-	windowBannedLimiter    = newRateLimiter(10, time.Minute)
+	windowBannedLimiter    = newRateLimiter(10, 60)
 
 	windowPort = "8080"
 )
@@ -25,7 +25,7 @@ func serveWindowHTTP(w http.ResponseWriter, r *http.Request) {
 		weight = 1
 	}
 	//simulates random server errors
-	if rand.Intn(50) == 5 {
+	if rand.Intn(200) == 5 {
 		http.Error(w, "Internal Service Error", 500)
 		return
 	}
