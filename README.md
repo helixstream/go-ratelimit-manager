@@ -25,6 +25,7 @@ config := NewRateLimitConfig(
 	    60,   //length of the sustained period in seconds
 	    20,   //number of requests allowed in the burst period
 	    1,    //length of the burst period in seconds
+	    3  //
 	)
 ```
 

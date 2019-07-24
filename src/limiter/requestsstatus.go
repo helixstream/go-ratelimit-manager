@@ -54,7 +54,7 @@ func (r *RequestsStatus) canMakeRequestLogic(requestWeight int, config RateLimit
 	now := getUnixTimeMilliseconds()
 
 	timeSinceLastError := now - r.lastErrorTime
-	if timeSinceLastError < 0 {
+	if timeSinceLastError < config.waitAfterHitLimit*1000 {
 		return false, config.timePeriod - timeSinceLastError
 	}
 

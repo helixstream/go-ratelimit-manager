@@ -2,7 +2,7 @@ package limiter
 
 //example function for godoc purposes
 func ExampleLimiter_WaitForRatelimit() {
-	config := NewRateLimitConfig("testhost", 60, 60, 1, 1)
+	config := NewRateLimitConfig("testhost", 60, 60, 1, 1, 3)
 	limiter, err := NewLimiter(config, pool)
 	if err != nil {
 		//handle err

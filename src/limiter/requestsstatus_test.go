@@ -7,7 +7,7 @@ import (
 )
 
 func Test_CanMakeRequestLogic(t *testing.T) {
-	host := NewRateLimitConfig("test_host_1", 1200, 60, 20, 1)
+	host := NewRateLimitConfig("test_host_1", 1200, 60, 20, 1, 0)
 
 	type HostStatusTest struct {
 		name                   string
@@ -85,9 +85,9 @@ func Test_CanMakeRequestLogic(t *testing.T) {
 
 func Test_IsInSustainedPeriod(t *testing.T) {
 	hosts := []RateLimitConfig{
-		NewRateLimitConfig("test_host_1", 20, 60, 20, 1),
-		NewRateLimitConfig("test_host_2", 30, 60, 20, 1),
-		NewRateLimitConfig("test_host_3", 20, 45, 20, 1),
+		NewRateLimitConfig("test_host_1", 20, 60, 20, 1, 0),
+		NewRateLimitConfig("test_host_2", 30, 60, 20, 1, 0),
+		NewRateLimitConfig("test_host_3", 20, 45, 20, 1, 0),
 	}
 
 	type HostStatusTest struct {
@@ -146,9 +146,9 @@ func Test_IsInSustainedPeriod(t *testing.T) {
 
 func Test_WillHitLimit(t *testing.T) {
 	hosts := []RateLimitConfig{
-		NewRateLimitConfig("test_host_1", 1200, 60, 30, 1),
-		NewRateLimitConfig("test_host_2", 600, 60, 30, 1),
-		NewRateLimitConfig("test_host_3", 100, 10, 300, 1),
+		NewRateLimitConfig("test_host_1", 1200, 60, 30, 1, 0),
+		NewRateLimitConfig("test_host_2", 600, 60, 30, 1, 0),
+		NewRateLimitConfig("test_host_3", 100, 10, 300, 1, 0),
 	}
 
 	type TestHostStatus struct {
