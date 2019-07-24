@@ -93,41 +93,40 @@ func makeRequests(t *testing.T, limiter Limiter, id int, c chan<- string, url st
 	numOfRequests := 3
 	for numOfRequests > 0 {
 		requestWeight := 1
-		canMake, sleepTime := limiter.CanMakeRequest(requestWeight)
-		if canMake {
-			statusCode, err := getStatusCode(url, requestWeight)
-			if err != nil {
-				t.Errorf("Error on getting Status Code: %v. ", err)
+
+		limiter.WaitForRatelimit(requestWeight)
+
+		statusCode, err := getStatusCode(url, requestWeight)
+		if err != nil {
+			t.Errorf("Error on getting Status Code: %v. ", err)
+			if err := limiter.RequestCancelled(requestWeight); err != nil {
+				t.Errorf("Error on Request Cancelled: %v. ", err)
 			}
-
-			if statusCode == 500 {
-				if err := limiter.RequestCancelled(requestWeight); err != nil {
-					t.Errorf("Error on Request Cancelled: %v. ", err)
-				}
-
-			} else if statusCode == 200 {
-				if err := limiter.RequestSuccessful(requestWeight); err != nil {
-					t.Errorf("Error on Request Finished: %v. ", err)
-				}
-				numOfRequests -= requestWeight
-			} else {
-				if getUnixTimeMilliseconds()-limiter.status.lastErrorTime < 5000 {
-					t.Errorf("Multiple 429s too close together \n")
-				}
-
-				if err := limiter.HitRateLimit(requestWeight); err != nil {
-					t.Errorf("Error on HitRateLimit: %v. ", err)
-				}
-
-				fmt.Printf("Routine: %v. %v. %v, %v \n", id, statusCode, limiter.status, limiter.config)
-			}
-
-			fmt.Print(".")
-
-		} else if sleepTime != 0 {
-			//fmt.Printf("Sleep time %v \n", sleepTime)
-			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 		}
+
+		if statusCode == 500 {
+			if err := limiter.RequestCancelled(requestWeight); err != nil {
+				t.Errorf("Error on Request Cancelled: %v. ", err)
+			}
+
+		} else if statusCode == 200 {
+			if err := limiter.RequestSuccessful(requestWeight); err != nil {
+				t.Errorf("Error on Request Finished: %v. ", err)
+			}
+			numOfRequests -= requestWeight
+		} else {
+			if getUnixTimeMilliseconds()-limiter.status.lastErrorTime < 5000 {
+				t.Errorf("Multiple 429s too close together \n")
+			}
+
+			if err := limiter.HitRateLimit(requestWeight); err != nil {
+				t.Errorf("Error on HitRateLimit: %v. ", err)
+			}
+
+			fmt.Printf("Routine: %v. %v. %v, %v \n", id, statusCode, limiter.status, limiter.config)
+		}
+
+		fmt.Print(".")
 	}
 
 	//if the time since the last error is less than one minute
@@ -324,6 +323,43 @@ func Test_updateStatusFromDatabase(t *testing.T) {
 
 		if diff := deep.Equal(l, newLimiter); diff != nil {
 			t.Errorf("Loop: %v. %v. ", i, diff)
+		}
+	}
+}
+
+func Test_GetStatus(t *testing.T) {
+
+	testCases := []Limiter{
+		{
+			newRequestsStatus(10, 45, getUnixTimeMilliseconds(), 42350232),
+			NewRateLimitConfig("host1", 45, 3, 452, 4),
+			pool,
+		},
+		{
+			newRequestsStatus(52, 85, 23542636, 34534),
+			NewRateLimitConfig("host2", 25453, 2343, 234, 3243),
+			pool,
+		},
+		{
+			newRequestsStatus(0, 0, 0, 0),
+			NewRateLimitConfig("host3", 0, 0, 0, 0),
+			pool,
+		},
+		{
+			newRequestsStatus(1, 23, 324, 423362),
+			NewRateLimitConfig("host4", 23523, 324, 23, 1),
+			pool,
+		},
+		{
+			newRequestsStatus(120, 32, 455635435, 1246564566),
+			NewRateLimitConfig("host5", 1200, 60, 20, 10),
+			pool,
+		},
+	}
+
+	for i := 0; i < len(testCases); i++ {
+		if diff := deep.Equal(testCases[i].GetStatus(), testCases[i].status); diff != nil {
+			t.Error(diff)
 		}
 	}
 }
